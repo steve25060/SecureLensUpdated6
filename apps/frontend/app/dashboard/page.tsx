@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   LineChart, Line, PieChart, Pie, Cell,
@@ -10,6 +11,14 @@ import {
 } from 'recharts';
 import { Plus, Calendar, Globe, GitBranch, Layers, TrendingUp, TrendingDown, Shield, Zap, AlertTriangle, CheckCircle, ArrowRight } from 'lucide-react';
 import type { DashboardOverview, RecentScan, ScanActivity } from '@/types/dashboard';
+import { useLiveScanSync } from '@/lib/live-scan-store';
+import { formatRelativeTime, useLiveClock } from '@/lib/time-utils';
+
+const getDynamicDateLabel = (daysAgo: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
 
 const SEED: DashboardOverview = {
   securityScores: [
@@ -28,13 +37,13 @@ const SEED: DashboardOverview = {
     low:      { count: 25, pct: 48 },
   },
   findingsOverTime: [
-    { date: 'May 10', critical: 2,  high: 8,  medium: 15, low: 25 },
-    { date: 'May 11', critical: 3,  high: 12, medium: 18, low: 30 },
-    { date: 'May 12', critical: 1,  high: 10, medium: 12, low: 22 },
-    { date: 'May 13', critical: 4,  high: 15, medium: 20, low: 35 },
-    { date: 'May 14', critical: 2,  high: 11, medium: 16, low: 28 },
-    { date: 'May 15', critical: 3,  high: 14, medium: 18, low: 32 },
-    { date: 'May 16', critical: 2,  high: 12, medium: 12, low: 25 },
+    { date: getDynamicDateLabel(6), critical: 2,  high: 8,  medium: 15, low: 25 },
+    { date: getDynamicDateLabel(5), critical: 3,  high: 12, medium: 18, low: 30 },
+    { date: getDynamicDateLabel(4), critical: 1,  high: 10, medium: 12, low: 22 },
+    { date: getDynamicDateLabel(3), critical: 4,  high: 15, medium: 20, low: 35 },
+    { date: getDynamicDateLabel(2), critical: 2,  high: 11, medium: 16, low: 28 },
+    { date: getDynamicDateLabel(1), critical: 3,  high: 14, medium: 18, low: 32 },
+    { date: getDynamicDateLabel(0), critical: 2,  high: 12, medium: 12, low: 25 },
   ],
   topVulnerabilityTypes: [
     { name: 'Missing Security Header',    count: 12 },
@@ -66,12 +75,16 @@ const scoreColor = (score: number) => {
   return { ring: '#ef4444', label: 'text-red-400', bg: 'from-red-500/20 to-red-500/5', border: 'border-red-500/20' };
 };
 
-const riskDonutData = (r: DashboardOverview['riskOverview']) => [
-  { name: 'Critical', value: r.critical.count, color: '#ef4444' },
-  { name: 'High',     value: r.high.count,     color: '#f97316' },
-  { name: 'Medium',   value: r.medium.count,   color: '#eab308' },
-  { name: 'Low',      value: r.low.count,      color: '#22c55e' },
-];
+const riskDonutData = (r: DashboardOverview['riskOverview']) => {
+  const list = [
+    { name: 'Critical', value: r.critical?.count ?? 0, color: '#ef4444' },
+    { name: 'High',     value: r.high?.count ?? 0,     color: '#f97316' },
+    { name: 'Medium',   value: r.medium?.count ?? 0,   color: '#eab308' },
+    { name: 'Low',      value: r.low?.count ?? 0,      color: '#22c55e' },
+  ];
+  const nonZero = list.filter(d => d.value > 0);
+  return nonZero.length > 0 ? nonZero : [{ name: 'No Vulnerabilities', value: 1, color: '#22c55e' }];
+};
 
 const typeBadge = (type: RecentScan['type']) => {
   const map = {
@@ -180,27 +193,100 @@ const ScoreGauge: React.FC<ScoreGaugeProps> = ({ score, label, name, change, ind
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState<DashboardOverview>(SEED);
   const [loading, setLoading] = useState(true);
+  const { scans: liveScans, findings: liveFindings, lastUpdated } = useLiveScanSync();
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    fetch('/api/dashboard/overview', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(json => setData(json))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    let isMounted = true;
+    const fetchOverview = () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+      fetch('/api/dashboard/overview', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(json => {
+          if (isMounted) setData(json);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (isMounted) setLoading(false);
+        });
+    };
 
-  const donut = riskDonutData(data.riskOverview);
+    fetchOverview();
+    const interval = setInterval(fetchOverview, 2000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [lastUpdated]);
+
+  const activeData = React.useMemo(() => {
+    const formattedRecentScans: RecentScan[] = liveScans.slice(0, 6).map(ls => {
+      let score = ls.score;
+      if (score === undefined || score === null || score === 0) {
+        score = Math.max(15, 100 - ((ls.findingsCount || 0) * 6));
+      }
+      return {
+        id: ls.id,
+        target: ls.target,
+        type: ls.type,
+        status: (ls.status === 'CANCELLED' ? 'FAILED' : ls.status) as RecentScan['status'],
+        score,
+        findingsCount: ls.findingsCount,
+        time: formatRelativeTime(ls.createdAt || ls.time),
+      };
+    });
+
+    const recentScans = [...formattedRecentScans, ...(data?.recentScans || []).filter(s => !formattedRecentScans.some(l => l.id === s.id))].slice(0, 6);
+
+    const liveActivities: ScanActivity[] = liveScans.slice(0, 4).map(ls => ({
+      message: `${ls.type === 'WEBSITE' ? 'Website' : 'Code'} Scan ${ls.status || 'Completed'}`,
+      detail: `${ls.target} (${ls.findingsCount} findings)`,
+      time: formatRelativeTime(ls.createdAt || ls.time),
+      type: ls.status === 'COMPLETED' ? 'success' : 'info',
+    }));
+
+    // If live findings exist, dynamically compute the riskOverview from live findings
+    let riskOverview = data?.riskOverview || SEED.riskOverview;
+    if (liveFindings.length > 0) {
+      const crit = liveFindings.filter(f => f.severity === 'CRITICAL').length;
+      const high = liveFindings.filter(f => f.severity === 'HIGH').length;
+      const med = liveFindings.filter(f => f.severity === 'MEDIUM').length;
+      const low = liveFindings.filter(f => f.severity === 'LOW').length;
+      const total = liveFindings.length;
+      riskOverview = {
+        total,
+        critical: { count: crit, pct: total > 0 ? Math.round((crit / total) * 100) : 0 },
+        high: { count: high, pct: total > 0 ? Math.round((high / total) * 100) : 0 },
+        medium: { count: med, pct: total > 0 ? Math.round((med / total) * 100) : 0 },
+        low: { count: low, pct: total > 0 ? Math.round((low / total) * 100) : 0 },
+      };
+    }
+
+    return {
+      ...(data || SEED),
+      riskOverview,
+      recentScans: recentScans.length > 0 ? recentScans : (data?.recentScans || SEED.recentScans),
+      scanActivity: [...liveActivities, ...(data?.scanActivity || SEED.scanActivity)].slice(0, 6),
+    };
+  }, [data, liveScans, liveFindings, lastUpdated]);
+
+  const donut = riskDonutData(activeData.riskOverview);
+
+  const totalScansCount = liveScans.length > 0 ? liveScans.length : (data?.recentScans?.length || 12);
+  const distinctTargets = new Set([
+    ...liveScans.map(s => s.target),
+    ...(data?.recentScans || []).map(s => s.target),
+  ]).size;
 
   const quickStats = [
-    { label: 'Total Scans', value: '1,247', change: '+12%', icon: Zap, color: 'text-violet-400', bg: 'bg-violet-500/10' },
-    { label: 'Active Findings', value: data.riskOverview.total, change: '+5', icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-    { label: 'Resolved', value: '38', change: '+8', icon: CheckCircle, color: 'text-green-400', bg: 'bg-green-500/10' },
-    { label: 'Avg Response', value: '2.4s', change: '-0.3s', icon: Shield, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    { label: 'Total Scans', value: `${totalScansCount}`, change: '+100% Live', icon: Zap, color: 'text-violet-400', bg: 'bg-violet-500/10' },
+    { label: 'Active Findings', value: `${activeData.riskOverview.total}`, change: 'Real-time', icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    { label: 'Security Score', value: `${liveScans[0]?.score ?? activeData.securityScores[0]?.score ?? 84}/100`, change: 'Aggregated', icon: Shield, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { label: 'Target Assets', value: `${distinctTargets || 1}`, change: 'Active Targets', icon: Globe, color: 'text-blue-400', bg: 'bg-blue-500/10' },
   ];
 
   return (
@@ -226,6 +312,7 @@ export default function DashboardPage() {
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
+            onClick={() => router.push('/dashboard/live-scan')}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-500 hover:to-violet-600 text-white text-sm font-medium transition-all duration-200 shadow-lg shadow-violet-600/20 hover:shadow-violet-600/40"
           >
             <Plus size={14} /> New Scan
@@ -261,7 +348,7 @@ export default function DashboardPage() {
         </motion.div>
       ) : (
         <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {data.securityScores.map((s, i) => (
+          {activeData.securityScores.map((s, i) => (
             <ScoreGauge key={i} score={s.score} label={s.label} name={s.name} change={s.change} index={i} />
           ))}
         </motion.div>
@@ -281,16 +368,16 @@ export default function DashboardPage() {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold text-white">{data.riskOverview.total}</span>
+                <span className="text-2xl font-bold text-white">{activeData.riskOverview.total}</span>
                 <span className="text-[10px] text-gray-500">Total</span>
               </div>
             </div>
             <div className="mt-5 w-full space-y-2.5">
               {[
-                { label: 'Critical', ...data.riskOverview.critical, color: 'bg-red-500', dot: 'bg-red-500' },
-                { label: 'High',     ...data.riskOverview.high,     color: 'bg-orange-500', dot: 'bg-orange-500' },
-                { label: 'Medium',   ...data.riskOverview.medium,   color: 'bg-yellow-500', dot: 'bg-yellow-500' },
-                { label: 'Low',      ...data.riskOverview.low,      color: 'bg-green-500', dot: 'bg-green-500' },
+                { label: 'Critical', ...activeData.riskOverview.critical, color: 'bg-red-500', dot: 'bg-red-500' },
+                { label: 'High',     ...activeData.riskOverview.high,     color: 'bg-orange-500', dot: 'bg-orange-500' },
+                { label: 'Medium',   ...activeData.riskOverview.medium,   color: 'bg-yellow-500', dot: 'bg-yellow-500' },
+                { label: 'Low',      ...activeData.riskOverview.low,      color: 'bg-green-500', dot: 'bg-green-500' },
               ].map(r => (
                 <div key={r.label} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
@@ -302,7 +389,7 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-          <button className="mt-5 text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 group/btn">
+          <button onClick={() => router.push('/dashboard/findings')} className="mt-5 text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 group/btn">
             View all findings <ArrowRight size={12} className="group-hover/btn:translate-x-0.5 transition-transform" />
           </button>
         </div>
@@ -310,7 +397,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-6 rounded-xl bg-white/[0.02] border border-white/[0.04] p-5 group hover:border-white/[0.08] transition-all duration-300">
           <h3 className="text-sm font-semibold text-white mb-4">Findings Over Time</h3>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={data.findingsOverTime}>
+            <LineChart data={activeData.findingsOverTime}>
               <XAxis dataKey="date" stroke="#4b5563" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis stroke="#4b5563" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip
@@ -334,7 +421,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-3 rounded-xl bg-white/[0.02] border border-white/[0.04] p-5 group hover:border-white/[0.08] transition-all duration-300">
           <h3 className="text-sm font-semibold text-white mb-4">Top Vulnerabilities</h3>
           <div className="space-y-3">
-            {data.topVulnerabilityTypes.map((v, i) => (
+            {activeData.topVulnerabilityTypes.map((v, i) => (
               <div key={v.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5 flex-1 min-w-0">
                   <span className="text-[10px] text-gray-600 font-mono w-4">{i + 1}</span>
@@ -345,7 +432,7 @@ export default function DashboardPage() {
                     <motion.div
                       className="h-full rounded-full bg-violet-500"
                       initial={{ width: 0 }}
-                      animate={{ width: `${(v.count / data.topVulnerabilityTypes[0].count) * 100}%` }}
+                      animate={{ width: `${(v.count / (activeData.topVulnerabilityTypes[0]?.count || 1)) * 100}%` }}
                       transition={{ duration: 0.8, delay: i * 0.1 }}
                     />
                   </div>
@@ -354,7 +441,7 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-          <button className="mt-5 text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 group/btn">
+          <button onClick={() => router.push('/dashboard/analytics')} className="mt-5 text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 group/btn">
             View analytics <ArrowRight size={12} className="group-hover/btn:translate-x-0.5 transition-transform" />
           </button>
         </div>
@@ -364,7 +451,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 rounded-xl bg-white/[0.02] border border-white/[0.04] p-5 group hover:border-white/[0.08] transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-white">Recent Scans</h3>
-            <button className="text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 group/btn">
+            <button onClick={() => router.push('/dashboard/live-scan')} className="text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 group/btn">
               View all <ArrowRight size={12} className="group-hover/btn:translate-x-0.5 transition-transform" />
             </button>
           </div>
@@ -378,7 +465,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/[0.04]">
-                {data.recentScans.map((scan, i) => {
+                {activeData.recentScans.map((scan, i) => {
                   const type = typeBadge(scan.type);
                   return (
                     <motion.tr
@@ -386,6 +473,7 @@ export default function DashboardPage() {
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.05 }}
+                      onClick={() => router.push('/dashboard/findings')}
                       className="hover:bg-white/[0.02] transition-colors group/row cursor-pointer"
                     >
                       <td className="py-3 pr-5">
@@ -402,8 +490,8 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td className="py-3 pr-5">
-                        <span className="font-semibold" style={{ color: scan.score ? scoreColor(scan.score).ring : '#6b7280' }}>
-                          {scan.score ? `${scan.score}/100` : '—'}
+                        <span className="font-semibold" style={{ color: (typeof scan.score === 'number' && scan.score > 0) ? scoreColor(scan.score).ring : '#6b7280' }}>
+                          {(typeof scan.score === 'number' && scan.score > 0) ? `${scan.score}/100` : '—'}
                         </span>
                       </td>
                       <td className="py-3 pr-5 text-gray-400">{scan.findingsCount}</td>
@@ -419,12 +507,11 @@ export default function DashboardPage() {
         <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-5 group hover:border-white/[0.08] transition-all duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-white">Scan Activity</h3>
-            <button className="text-xs text-violet-400 hover:text-violet-300 transition-colors">View all</button>
           </div>
           <div className="relative">
             <div className="absolute left-[7px] top-2 bottom-2 w-px bg-gradient-to-b from-violet-500/30 via-violet-500/10 to-transparent" />
             <div className="space-y-5">
-              {data.scanActivity.map((a, i) => (
+              {activeData.scanActivity.map((a, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, x: -8 }}
@@ -449,9 +536,6 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-          <button className="mt-5 text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1 group/btn">
-            View timeline <ArrowRight size={12} className="group-hover/btn:translate-x-0.5 transition-transform" />
-          </button>
         </div>
       </motion.div>
     </motion.div>

@@ -23,4 +23,8 @@ export class CreateScanDto {
   @IsArray()
   @IsString({ each: true })
   engines?: string[];
+
+  @IsOptional()
+  @IsIn(['fast', 'normal', 'aggressive'])
+  profile?: 'fast' | 'normal' | 'aggressive';
 }

@@ -45,6 +45,67 @@ export const ENGINE_FINDINGS: Record<string, FindingTemplate[]> = {
     { title: 'Certificate Expiring Soon', description: 'The TLS certificate expires within 14 days.', severity: 'MEDIUM', category: 'SSL/TLS', cwe: 'CWE-295', cvss: 4.9, remediation: 'Renew the certificate and set up automated renewal.' },
     { title: 'Missing HSTS Header', description: 'HTTP Strict-Transport-Security is not set, allowing downgrade attacks.', severity: 'LOW', category: 'Security Headers', cwe: 'CWE-319', cvss: 3.1, remediation: 'Send the HSTS header with a long max-age and include subdomains.' },
   ],
+  http_security: [
+    { title: 'Missing Content-Security-Policy (CSP)', description: 'Target does not enforce Content-Security-Policy, allowing cross-site scripting (XSS) and data injection.', severity: 'HIGH', category: 'Security Headers', cwe: 'CWE-1021', cvss: 7.2, remediation: 'Add strict Content-Security-Policy header.' },
+    { title: 'Missing HTTP Strict-Transport-Security (HSTS)', description: 'Target does not enforce HTTPS connections via HSTS headers.', severity: 'MEDIUM', category: 'Security Headers', cwe: 'CWE-319', cvss: 5.4, remediation: 'Send Strict-Transport-Security header with max-age=31536000.' },
+    { title: 'Missing X-Frame-Options (Clickjacking Protection)', description: 'Target can be embedded inside an iframe on malicious sites.', severity: 'HIGH', category: 'Security Headers', cwe: 'CWE-1021', cvss: 6.5, remediation: 'Set X-Frame-Options: DENY or SAMEORIGIN.' },
+  ],
+  api_security: [
+    { title: 'Publicly Accessible OpenAPI / Swagger API Documentation', description: 'Discovered unauthenticated API schema documentation exposing private endpoints and parameters.', severity: 'MEDIUM', category: 'API Security', cwe: 'CWE-200', cvss: 5.3, remediation: 'Restrict Swagger/OpenAPI documentation to internal developer networks.' },
+    { title: 'GraphQL Introspection Query Enabled in Production', description: 'GraphQL endpoint has schema introspection enabled, allowing full database schema dumping.', severity: 'HIGH', category: 'API Security', cwe: 'CWE-200', cvss: 7.5, remediation: 'Disable GraphQL introspection in production environments.' },
+    { title: 'Missing API Rate Limiting Headers', description: 'Public API routes do not return rate limiting headers, risking automated abuse.', severity: 'LOW', category: 'API Security', cwe: 'CWE-770', cvss: 4.8, remediation: 'Implement rate limiting on all public API endpoints.' },
+  ],
+  waf_detection: [
+    { title: 'Active Cloud Perimeter & WAF Protection Detected', description: 'Target is protected by an active Web Application Firewall filtering layer-7 traffic.', severity: 'INFO', category: 'Perimeter Defense', cwe: 'CWE-1008', cvss: 0.0, remediation: 'Regularly audit WAF managed rule groups and rate limiting rules.' },
+    { title: 'No Active Web Application Firewall (WAF) Detected', description: 'Target is served directly from origin servers without WAF or DDoS mitigation.', severity: 'MEDIUM', category: 'Perimeter Defense', cwe: 'CWE-1008', cvss: 5.5, remediation: 'Deploy a Web Application Firewall (e.g. Cloudflare, AWS WAF) on the perimeter.' },
+  ],
+  email_security: [
+    { title: 'Missing DMARC Anti-Spoofing Record on Domain', description: 'Domain is missing a DMARC TXT record, allowing attackers to forge phishing emails.', severity: 'HIGH', category: 'Email Security', cwe: 'CWE-290', cvss: 7.5, remediation: 'Publish a DMARC record at `_dmarc.<domain>` with `p=reject` or `p=quarantine`.' },
+    { title: 'Weak DMARC Policy Configured: p=none', description: 'DMARC is set to monitoring mode only, permitting spoofed domain emails to reach inboxes.', severity: 'MEDIUM', category: 'Email Security', cwe: 'CWE-290', cvss: 5.8, remediation: 'Upgrade DMARC policy from `p=none` to `p=quarantine` or `p=reject`.' },
+    { title: 'Dangerous SPF Wildcard (+all) Configured', description: 'The SPF record contains `+all`, authorizing any server on the internet to send email.', severity: 'CRITICAL', category: 'Email Security', cwe: 'CWE-290', cvss: 9.1, remediation: 'Replace `+all` with `~all` or `-all` in your SPF record.' },
+  ],
+  privacy_compliance: [
+    { title: 'Third-Party Tracking & Analytics Services Detected', description: 'Active tracking scripts found firing prior to receiving user consent under GDPR/CCPA.', severity: 'LOW', category: 'Privacy & Compliance', cwe: 'CWE-359', cvss: 3.5, remediation: 'Implement a Consent Management Platform to gate third-party tags.' },
+    { title: 'Insecure Mixed Content (HTTP Assets on HTTPS Page)', description: 'HTTPS page references unencrypted HTTP scripts or stylesheets, enabling MITM.', severity: 'HIGH', category: 'Privacy & Compliance', cwe: 'CWE-319', cvss: 7.4, remediation: 'Upgrade asset references to HTTPS and enforce upgrade-insecure-requests.' },
+  ],
+  code_security: [
+    { title: 'OS Command Injection via Unsanitized Shell Execution', description: 'User-controlled input passed directly to child_process.exec without sanitization.', severity: 'CRITICAL', category: 'Static Analysis', cwe: 'CWE-78', cvss: 9.8, owasp: 'A03:2021', remediation: 'Use execFile or spawn with argument arrays instead of shell strings.' },
+    { title: 'SQL Injection via Dynamic Query Construction', description: 'SQL query constructed via string concatenation instead of parameterized placeholders.', severity: 'HIGH', category: 'Static Analysis', cwe: 'CWE-89', cvss: 8.6, owasp: 'A03:2021', remediation: 'Use parameterized queries or prepared statements.' },
+    { title: 'Cross-Site Scripting (XSS) via Unsafe DOM Insertion', description: 'Direct assignment to innerHTML or dangerouslySetInnerHTML with unsanitized user content.', severity: 'HIGH', category: 'Static Analysis', cwe: 'CWE-79', cvss: 7.5, owasp: 'A03:2021', remediation: 'Sanitize HTML with DOMPurify or use safe JSX text bindings.' },
+    { title: 'Path Traversal via Unvalidated File Path Access', description: 'File read operations accept user-controlled filename input without path validation.', severity: 'HIGH', category: 'Static Analysis', cwe: 'CWE-22', cvss: 7.8, remediation: 'Validate paths with path.resolve and enforce a strict base directory whitelist.' },
+  ],
+  secret_detection: [
+    { title: 'Exposed AWS Access Key ID & Secret Access Key', description: 'Long-lived AWS access keys detected in repository source code.', severity: 'CRITICAL', category: 'Secret Detection', cwe: 'CWE-798', cvss: 9.8, remediation: 'Rotate key in AWS IAM immediately and store in a secure secrets vault.' },
+    { title: 'Exposed GitHub Personal Access Token', description: 'A personal access token was checked into source code.', severity: 'CRITICAL', category: 'Secret Detection', cwe: 'CWE-798', cvss: 9.2, remediation: 'Revoke the token in GitHub Developer Settings and generate a fine-grained token.' },
+    { title: 'Hardcoded Database Connection String with Credentials', description: 'Postgres/MySQL connection URI containing raw password embedded in config.', severity: 'HIGH', category: 'Secret Detection', cwe: 'CWE-798', cvss: 8.5, remediation: 'Use environment variables (DATABASE_URL) and rotate the database credentials.' },
+  ],
+  dependency_analysis: [
+    { title: 'Vulnerable npm Package: lodash (CVE-2021-23337)', description: 'Command Injection vulnerability in lodash template parsing.', severity: 'HIGH', category: 'Supply Chain', cwe: 'CWE-94', cvss: 7.5, remediation: 'Upgrade lodash to version 4.17.21 or higher.' },
+    { title: 'Critical Vulnerability in jsonwebtoken (CVE-2022-23529)', description: 'Insecure Key Verification allowing arbitrary code execution during JWT verification.', severity: 'CRITICAL', category: 'Supply Chain', cwe: 'CWE-94', cvss: 9.8, remediation: 'Upgrade jsonwebtoken to version 9.0.0 or higher.' },
+    { title: 'Prototype Pollution in minimist (CVE-2021-44906)', description: 'Prototype pollution in parameter parsing in minimist library.', severity: 'CRITICAL', category: 'Supply Chain', cwe: 'CWE-1321', cvss: 9.8, remediation: 'Upgrade minimist to version 1.2.6 or higher.' },
+  ],
+  infrastructure_security: [
+    { title: 'Container Running as Root User in Dockerfile', description: 'Dockerfile missing non-root USER directive, allowing container processes to execute as root.', severity: 'HIGH', category: 'Infrastructure as Code', cwe: 'CWE-250', cvss: 7.8, remediation: 'Add `USER appuser` to the Dockerfile to drop root privileges.' },
+    { title: 'Kubernetes Pod Configured with Privileged Mode', description: 'Deployment manifest specifies `privileged: true`, granting host root access.', severity: 'CRITICAL', category: 'Infrastructure as Code', cwe: 'CWE-250', cvss: 9.8, remediation: 'Set `securityContext.privileged: false` and grant only specific required capabilities.' },
+    { title: 'Unpinned Base Image Tag in Dockerfile', description: 'Dockerfile uses `:latest` tag instead of an immutable version tag or image SHA digest.', severity: 'MEDIUM', category: 'Infrastructure as Code', cwe: 'CWE-1188', cvss: 5.3, remediation: 'Pin specific image tags (e.g., `node:20.11.0-alpine3.19`).' },
+  ],
+  cicd_security: [
+    { title: 'GitHub Actions Script Injection via Untrusted Context', description: 'Inline shell step directly evaluates untrusted pull request or issue title/body.', severity: 'HIGH', category: 'CI/CD Security', cwe: 'CWE-78', cvss: 8.4, owasp: 'A03:2021', remediation: 'Pass untrusted variables through `env:` environment mapping.' },
+    { title: 'Dangerous Workflow Trigger: pull_request_target with Head Checkout', description: 'Workflow executes on pull_request_target while checking out untrusted fork code.', severity: 'CRITICAL', category: 'CI/CD Security', cwe: 'CWE-250', cvss: 9.8, remediation: 'Use standard `pull_request` trigger or avoid checking out untrusted head refs.' },
+    { title: 'Unpinned Third-Party GitHub Action (Mutable Tag)', description: 'Workflow uses mutable version tag instead of immutable 40-character commit SHA.', severity: 'MEDIUM', category: 'CI/CD Security', cwe: 'CWE-1357', cvss: 6.5, remediation: 'Pin third-party actions to full commit SHA digests.' },
+  ],
+  license_compliance: [
+    { title: 'Strong Copyleft License Identified (AGPL-3.0)', description: 'Project incorporates dependencies with AGPL-3.0 network copyleft requirements.', severity: 'HIGH', category: 'License Compliance', cwe: 'CWE-1059', cvss: 7.0, remediation: 'Review distribution model and ensure compliance with open source licensing policies.' },
+    { title: 'Missing Open-Source License File (LICENSE)', description: 'No root LICENSE or COPYING file was detected in the repository.', severity: 'MEDIUM', category: 'License Compliance', cwe: 'CWE-1059', cvss: 4.5, remediation: 'Add a standard `LICENSE` file to the repository root.' },
+  ],
+  container_security: [
+    { title: 'Container Configured to Run as Root User', description: 'Dockerfile does not specify a non-root USER directive, executing processes as UID 0.', severity: 'HIGH', category: 'Container Security', cwe: 'CWE-250', cvss: 7.8, remediation: 'Add `USER 1001` or `USER appuser` to drop root privileges.' },
+    { title: 'Sensitive Credential Baked into Container Build Layers', description: 'Sensitive variable defined using ENV or ARG in Dockerfile, persisting in image layer metadata.', severity: 'HIGH', category: 'Container Security', cwe: 'CWE-798', cvss: 8.2, remediation: 'Use BuildKit secret mounts (`RUN --mount=type=secret`) or runtime env vars.' },
+    { title: 'Insecure Remote Code Execution via curl | sh in Dockerfile', description: 'Dockerfile pipes remotely downloaded scripts directly to a shell interpreter without checksum verification.', severity: 'HIGH', category: 'Container Security', cwe: 'CWE-829', cvss: 8.1, remediation: 'Verify SHA256 checksums or GPG signatures before executing downloaded binaries.' },
+  ],
+  repository_overview: [
+    { title: 'Repository Structure & Composition Analyzed', description: 'Discovered source files, package manifests, and infrastructure configuration files.', severity: 'INFO', category: 'Repository Overview', remediation: 'No action required — repository baseline created.' },
+  ],
   code_scanner: [
     { title: 'Hardcoded Password Detected', description: 'A password is assigned directly in source code.', severity: 'HIGH', category: 'Code Quality', cwe: 'CWE-798', cvss: 7.5, remediation: 'Move secrets to environment variables or a secret manager.' },
     { title: 'Insecure Deserialization', description: 'User-controlled data is deserialized without validation.', severity: 'CRITICAL', category: 'Injection', cwe: 'CWE-502', cvss: 9.0, remediation: 'Validate and sanitize all serialized input; avoid native deserialization.' },
@@ -61,8 +122,6 @@ export const ENGINE_FINDINGS: Record<string, FindingTemplate[]> = {
     { title: 'Private API Key in Config', description: 'A third-party API key is checked into the repository.', severity: 'MEDIUM', category: 'Secrets', cwe: 'CWE-540', cvss: 5.3, remediation: 'Rotate the key and load it from the environment.' },
   ],
   results_cleaner: [
-    // The results cleaner correlates rather than finds new issues. We still emit
-    // an informational finding so users see it ran.
     { title: 'Duplicate Findings Merged', description: 'Multiple engines reported the same issue; duplicates were merged into one finding.', severity: 'INFO', category: 'Correlation', remediation: 'No action — this improves the accuracy of your findings list.' },
   ],
 };

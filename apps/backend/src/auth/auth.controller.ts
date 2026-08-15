@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Body, Get, Req, UseGuards, Redirect, UnauthorizedException,
+  Controller, Post, Put, Body, Get, Req, UseGuards, Redirect, UnauthorizedException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService, OAuthProfile } from './auth.service';
@@ -7,7 +7,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
 interface AuthenticatedRequest {
-  user?: { userId?: string; username?: string; email?: string } & OAuthProfile;
+  user?: { userId?: string; sub?: string; username?: string; email?: string } & OAuthProfile;
 }
 
 @Controller('auth')
@@ -24,6 +24,12 @@ export class AuthController {
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     return this.authService.validateUser(loginDto);
+  }
+
+  @Put('profile')
+  async updateProfile(@Req() req: AuthenticatedRequest, @Body() body: { name?: string; email?: string; organization?: string }) {
+    const userId = req.user?.userId || req.user?.sub || 'test-user-1';
+    return this.authService.updateProfile(userId, body);
   }
 
   /** Returns the current user derived from the JWT (Bearer token). */

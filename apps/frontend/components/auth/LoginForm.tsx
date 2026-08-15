@@ -51,8 +51,8 @@ export default function LoginForm() {
         if (data.user.email) {
           localStorage.setItem("user_email", data.user.email);
         }
-        if (data.user.username || data.user.firstName || data.user.lastName) {
-          const name = data.user.username || `${data.user.firstName} ${data.user.lastName}`.trim();
+        if (data.user.name || data.user.username || data.user.firstName || data.user.lastName) {
+          const name = data.user.name || data.user.username || `${data.user.firstName || ''} ${data.user.lastName || ''}`.trim();
           localStorage.setItem("user_name", name);
         }
       }

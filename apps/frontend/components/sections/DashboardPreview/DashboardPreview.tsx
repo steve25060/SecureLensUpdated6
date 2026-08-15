@@ -56,14 +56,20 @@ const riskData = [
   { name: "Low", value: 25, color: "#22c55e" },
 ];
 
+const getDynamicDateLabel = (daysAgo: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
 const findingData = [
-  { date: "May 10", critical: 8, high: 18, medium: 31, low: 44 },
-  { date: "May 11", critical: 10, high: 21, medium: 38, low: 49 },
-  { date: "May 12", critical: 9, high: 25, medium: 42, low: 56 },
-  { date: "May 13", critical: 12, high: 28, medium: 37, low: 51 },
-  { date: "May 14", critical: 13, high: 32, medium: 45, low: 62 },
-  { date: "May 15", critical: 17, high: 38, medium: 49, low: 70 },
-  { date: "May 16", critical: 16, high: 41, medium: 55, low: 74 },
+  { date: getDynamicDateLabel(6), critical: 8, high: 18, medium: 31, low: 44 },
+  { date: getDynamicDateLabel(5), critical: 10, high: 21, medium: 38, low: 49 },
+  { date: getDynamicDateLabel(4), critical: 9, high: 25, medium: 42, low: 56 },
+  { date: getDynamicDateLabel(3), critical: 12, high: 28, medium: 37, low: 51 },
+  { date: getDynamicDateLabel(2), critical: 13, high: 32, medium: 45, low: 62 },
+  { date: getDynamicDateLabel(1), critical: 17, high: 38, medium: 49, low: 70 },
+  { date: getDynamicDateLabel(0), critical: 16, high: 41, medium: 55, low: 74 },
 ];
 
 // Tuple type: [name, count, color]

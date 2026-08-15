@@ -7,6 +7,10 @@ import {
   Search, Play, Trash2, X, Check, ChevronRight, ArrowRight, TrendingUp,
   Loader2, RefreshCw, ExternalLink, Activity, Pencil, ServerCrash,
 } from 'lucide-react';
+import { enginesForMode } from '@/lib/engines';
+import { EngineIcon } from '@/components/dashboard/EngineIcon';
+import { formatRelativeTime, formatExactDateTime } from '@/lib/time-utils';
+import { useLiveScanSync } from '@/lib/live-scan-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type WorkspaceType = 'WEBSITE' | 'GITHUB' | 'COMBINED';
@@ -62,8 +66,6 @@ const authHeaders = (): Record<string, string> => {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
-
-const ENGINES = ['Nmap', 'httpx', 'WhatWeb', 'Nuclei', 'OWASP ZAP', 'testssl.sh', 'Semgrep', 'Gitleaks', 'Trivy'];
 
 const typeConfig: Record<WorkspaceType, {
   label: string; icon: typeof Globe;
@@ -141,8 +143,22 @@ function CreateWizard({
     type: 'WEBSITE' as WorkspaceType, targetUrl: '', repoUrl: '',
   });
   const [tagInput, setTagInput] = useState('');
-  const [engines, setEngines] = useState(['Nmap', 'httpx', 'Nuclei', 'OWASP ZAP']);
-  const [loading, setLoading] = useState(false);
+  
+  // Available engines derived from mode
+  const currentMode = form.type.toLowerCase() as 'website' | 'github' | 'combined';
+  const availableEngines = enginesForMode(currentMode);
+  
+  const [selectedEngineIds, setSelectedEngineIds] = useState<string[]>(
+    availableEngines.slice(0, 5).map(e => e.id)
+  );
+
+  // Sync selected engines when mode changes
+  useEffect(() => {
+    const nextEngines = enginesForMode(form.type.toLowerCase() as 'website' | 'github' | 'combined');
+    setSelectedEngineIds(nextEngines.slice(0, 5).map(e => e.id));
+  }, [form.type]);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const steps = ['Workspace Details', 'Select Mode', 'Configure', 'Review'];
 
@@ -158,7 +174,7 @@ function CreateWizard({
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { onToast('Workspace name is required', 'error'); return; }
-    setLoading(true);
+    setIsSubmitting(true);
     try {
       // Build the payload the backend expects (CreateWorkspaceDto).
       const payload = {
@@ -203,8 +219,14 @@ function CreateWizard({
       console.error('Failed to create workspace:', error);
       onToast('Failed to create workspace: ' + (error as Error).message, 'error');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
+  };
+
+  const toggleEngine = (id: string) => {
+    setSelectedEngineIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   return (
@@ -311,17 +333,31 @@ function CreateWizard({
                   )}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm font-medium text-gray-300">Scan Engines</label>
-                      <button onClick={() => setEngines(ENGINES)} className="text-xs text-violet-400 hover:text-violet-300 transition-colors">Select All</button>
+                      <label className="text-sm font-medium text-gray-300">
+                        Scan Engines <span className="text-gray-500 font-normal">({availableEngines.length})</span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => setSelectedEngineIds(availableEngines.map(e => e.id))} className="text-xs text-violet-400 hover:text-violet-300 transition-colors">Select All</button>
+                        <button onClick={() => setSelectedEngineIds([])} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear</button>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {ENGINES.map(e => (
-                        <label key={e} className="flex items-center gap-2.5 cursor-pointer group p-2 rounded-lg hover:bg-white/[0.02] transition-colors">
-                          <input type="checkbox" checked={engines.includes(e)} onChange={() => setEngines(prev => prev.includes(e) ? prev.filter(x => x !== e) : [...prev, e])}
-                            className="w-4 h-4 accent-violet-500 rounded" />
-                          <span className="text-sm text-gray-400 group-hover:text-gray-200 transition-colors">{e}</span>
-                        </label>
-                      ))}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                      {availableEngines.map(eng => {
+                        const isSelected = selectedEngineIds.includes(eng.id);
+                        return (
+                          <label key={eng.id} className={`flex items-center gap-2.5 cursor-pointer p-2.5 rounded-lg border transition-all ${
+                            isSelected ? 'border-violet-500/30 bg-violet-600/10' : 'border-white/[0.04] bg-white/[0.02] hover:border-white/[0.08]'
+                          }`}>
+                            <input type="checkbox" checked={isSelected} onChange={() => toggleEngine(eng.id)}
+                              className="w-4 h-4 accent-violet-500 rounded shrink-0" />
+                            <EngineIcon name={eng.icon} accent={eng.accent} size={14} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-white truncate">{eng.name}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{eng.tool}</p>
+                            </div>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 </motion.div>
@@ -334,7 +370,7 @@ function CreateWizard({
                     { label: 'Type', value: typeConfig[form.type].label },
                     { label: 'Target URL', value: form.targetUrl || '—' },
                     { label: 'Repository', value: form.repoUrl || '—' },
-                    { label: 'Engines', value: engines.join(', ') || '—' },
+                    { label: 'Engines', value: availableEngines.filter(e => selectedEngineIds.includes(e.id)).map(e => `${e.name} (${e.tool})`).join(', ') || '—' },
                     { label: 'Tags', value: form.tags.join(', ') || '—' },
                   ].map(row => (
                     <div key={row.label} className="flex items-start gap-4 py-2.5 border-b border-white/[0.04]">
@@ -390,9 +426,9 @@ function CreateWizard({
               Next: {steps[step]} →
             </button>
           ) : (
-            <button onClick={handleSubmit} disabled={loading}
+            <button onClick={handleSubmit} disabled={isSubmitting}
               className="px-6 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-600/20 flex items-center gap-2">
-              {loading ? <><Loader2 size={14} className="animate-spin" /> Creating…</> : <><Plus size={14} /> Create Workspace</>}
+              {isSubmitting ? <><Loader2 size={14} className="animate-spin" /> Creating…</> : <><Plus size={14} /> Create Workspace</>}
             </button>
           )}
         </div>
@@ -538,8 +574,8 @@ function WorkspaceCard({
         </div>
       )}
       <div className="flex items-center justify-between pt-3 border-t border-white/[0.04] relative">
-        <div className="flex items-center gap-1.5 text-xs text-gray-500">
-          <Clock size={11} />{timeAgo(ws.createdAt)}
+        <div className="flex items-center gap-1.5 text-xs text-gray-400" title={`Created: ${formatExactDateTime(ws.createdAt)}`}>
+          <Clock size={11} className="text-violet-400" />{formatRelativeTime(ws.createdAt)}
         </div>
         <button onClick={() => onScan(ws)} className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium group/btn">
           New scan <ArrowRight size={12} className="group-hover/btn:translate-x-0.5 transition-transform" />
@@ -621,7 +657,41 @@ export default function WorkspacesPage() {
     window.location.href = `/dashboard/live-scan?${params.toString()}`;
   };
 
-  const filtered = workspaces.filter(w => {
+  const { liveScans } = useLiveScanSync();
+
+  // Merge live scans dynamically and compute accurate risk scores
+  const activeWorkspaces = workspaces.map(ws => {
+    const matchingScan = liveScans.find(ls => 
+      (ls.id && ls.id.includes(ws.id)) ||
+      (ws.targetUrl && ls.target && ls.target.toLowerCase().includes(ws.targetUrl.toLowerCase())) ||
+      (ws.repoUrl && ls.target && ls.target.toLowerCase().includes(ws.repoUrl.toLowerCase())) ||
+      (ls.target && ws.name && ls.target.toLowerCase().includes(ws.name.toLowerCase()))
+    );
+
+    let score = ws.riskScore;
+    let findingsCount = ws.findingsCount;
+
+    if (matchingScan) {
+      if (matchingScan.score !== undefined && matchingScan.score !== null && matchingScan.score > 0) {
+        score = matchingScan.score;
+      }
+      if (matchingScan.findingsCount !== undefined) {
+        findingsCount = matchingScan.findingsCount;
+      }
+    }
+
+    if (score === null || score === undefined || score === 0) {
+      score = Math.max(25, 100 - ((findingsCount || 0) * 5));
+    }
+
+    return {
+      ...ws,
+      riskScore: score,
+      findingsCount: findingsCount ?? 0,
+    };
+  });
+
+  const filtered = activeWorkspaces.filter(w => {
     const matchSearch = w.name.toLowerCase().includes(search.toLowerCase())
       || (w.description ?? '').toLowerCase().includes(search.toLowerCase())
       || (w.tags ?? []).some(t => t.toLowerCase().includes(search.toLowerCase()));
@@ -629,11 +699,16 @@ export default function WorkspacesPage() {
     return matchSearch && matchType;
   });
 
+  const scoredWorkspaces = activeWorkspaces.filter(w => typeof w.riskScore === 'number' && !isNaN(w.riskScore));
+  const computedAvgScore = scoredWorkspaces.length > 0
+    ? Math.round(scoredWorkspaces.reduce((s, w) => s + (w.riskScore ?? 0), 0) / scoredWorkspaces.length)
+    : null;
+
   const stats = [
-    { label: 'Total Workspaces', value: workspaces.length, icon: Shield, color: 'text-violet-400', bg: 'bg-violet-500/10' },
-    { label: 'Total Findings', value: workspaces.reduce((s, w) => s + (w.findingsCount ?? 0), 0), icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-    { label: 'Avg Risk Score', value: workspaces.length ? Math.round(workspaces.reduce((s, w) => s + (w.riskScore ?? 0), 0) / workspaces.filter(w => w.riskScore != null).length || 0) + '/100' : '—', icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { label: 'Active Scans', value: workspaces.filter(w => w.status === 'RUNNING' || w.status === 'running').length, icon: Activity, color: 'text-green-400', bg: 'bg-green-500/10' },
+    { label: 'Total Workspaces', value: activeWorkspaces.length, icon: Shield, color: 'text-violet-400', bg: 'bg-violet-500/10' },
+    { label: 'Total Findings', value: activeWorkspaces.reduce((s, w) => s + (w.findingsCount ?? 0), 0), icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    { label: 'Avg Risk Score', value: computedAvgScore !== null ? `${computedAvgScore}/100` : '—', icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    { label: 'Active Scans', value: activeWorkspaces.filter(w => w.status === 'RUNNING' || w.status === 'running').length, icon: Activity, color: 'text-green-400', bg: 'bg-green-500/10' },
   ];
 
   return (

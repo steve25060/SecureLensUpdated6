@@ -2,7 +2,8 @@
 
 import {
   Globe, GitFork, Radio, Cpu, ShieldCheck, Lock, Search, Network,
-  Bug, Sparkles, FolderTree, Code, Key, Package, Box,
+  Bug, Sparkles, FolderTree, Code, Key, Package, Box, Server, FileText,
+  Shield, Mail,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -26,6 +27,10 @@ const ICONS: Record<string, LucideIcon> = {
   key: Key,
   package: Package,
   box: Box,
+  server: Server,
+  'file-text': FileText,
+  shield: Shield,
+  mail: Mail,
 };
 
 export function EngineIcon({

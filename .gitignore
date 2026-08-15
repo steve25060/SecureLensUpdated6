@@ -124,6 +124,12 @@ Thumbs.db
 dist/
 build/
 
+# Temporary test execution artifacts
+*-results.txt
+securelens-test-*/
+patch.js
+apps/backend/bin/
+
 # Personal config artifacts
 .bash_profile
 .bashrc

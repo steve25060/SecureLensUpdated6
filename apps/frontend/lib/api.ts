@@ -11,14 +11,13 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
  * - NEXT_PUBLIC_BACKEND_URL: Backend base URL (e.g., http://localhost:4000)
  */
 
-// In production, use the full backend URL for direct API calls
-// In development, either use proxy (/api) or direct backend URL
-const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL 
-  ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api`
-  : '/api';
+// Always use Next.js rewrite proxy for API calls
+// This ensures all requests go through the configured rewrites in next.config.js
+const BASE_URL = '/api';
 
 console.log('[API Client] Configured with BASE_URL:', BASE_URL);
 console.log('[API Client] NODE_ENV:', process.env.NODE_ENV);
+console.log('[API Client] Backend URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
 
 const api = axios.create({
   baseURL: BASE_URL,

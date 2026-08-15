@@ -17,7 +17,6 @@ import {
   Menu,
   X,
   Zap,
-  Clock,
   Shield,
   Users,
 } from 'lucide-react';
@@ -36,13 +35,6 @@ const NAV_ITEMS = [
   { name: 'Community',     href: '/dashboard/community',    icon: Users },
   { name: 'Settings',      href: '/dashboard/settings',     icon: Settings },
 ] as const;
-
-const RECENT_WORKSPACES = [
-  { id: 1, name: 'api-gateway-prod',   time: '2h ago' },
-  { id: 2, name: 'frontend-app',       time: '5h ago' },
-  { id: 3, name: 'auth-service',       time: '1d ago' },
-  { id: 4, name: 'data-pipeline',      time: '2d ago' },
-];
 
 interface NavLinksProps {
   pathname: string;
@@ -156,29 +148,6 @@ const SidebarContent: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden py-2 space-y-4 scrollbar-thin">
         <NavLinks pathname={pathname} onClose={onClose} />
-
-        <div className="px-5 pt-4">
-          <div className="border-t border-white/[0.04] pt-4">
-            <div className="flex items-center gap-1.5 mb-3 text-[10px] uppercase tracking-widest text-gray-600 font-semibold">
-              <Clock size={10} className="shrink-0" />
-              <span>Recent Workspaces</span>
-            </div>
-            <ul className="space-y-0.5">
-              {RECENT_WORKSPACES.map((ws) => (
-                <li key={ws.id}>
-                  <Link
-                    href="/dashboard/workspaces"
-                    onClick={onClose}
-                    className="flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-gray-300 hover:bg-white/[0.03] transition-all duration-200 group"
-                  >
-                    <span className="truncate max-w-[120px] group-hover:translate-x-0.5 transition-transform">{ws.name}</span>
-                    <span className="text-gray-600 shrink-0 ml-2">{ws.time}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
       </div>
 
       <div className="px-3 pb-4 shrink-0">

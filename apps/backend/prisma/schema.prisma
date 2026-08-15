@@ -69,6 +69,7 @@ model Scan {
   userId           String?
   type             ScanType    @default(WEBSITE)
   mode             String      @default("website") // website, github, combined
+  profile          String?     @default("normal") // fast, normal, aggressive
   status           ScanStatus  @default(PENDING)
   target           String
   targetUrl        String?     // normalized target URL

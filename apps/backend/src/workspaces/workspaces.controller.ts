@@ -1,23 +1,25 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
 import { WorkspacesService } from './workspaces.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 
-interface AuthRequest { user?: { userId?: string; username?: string } }
+interface AuthRequest { user?: { id?: string; userId?: string; username?: string } }
 
 @Controller('workspaces')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(OptionalJwtAuthGuard)
 export class WorkspacesController {
   constructor(private readonly workspacesService: WorkspacesService) {}
 
   @Get()
   findAll(@Req() req: AuthRequest) {
-    return this.workspacesService.findAll(req.user?.userId ?? 'demo');
+    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    return this.workspacesService.findAll(userId);
   }
 
   @Post()
   create(@Req() req: AuthRequest, @Body() dto: CreateWorkspaceDto) {
-    return this.workspacesService.create(req.user?.userId ?? 'demo', dto);
+    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    return this.workspacesService.create(userId, dto);
   }
 
   @Get(':id')

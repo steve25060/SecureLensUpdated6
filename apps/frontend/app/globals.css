@@ -5,10 +5,15 @@
   --color-background-secondary: #0a0a12;
   --color-surface: #0f0f1a;
   --color-surface-hover: #1a1a2e;
-  --color-accent: #7c3aed;
-  --color-accent-light: #8b5cf6;
-  --color-accent-dark: #5b21b6;
+  --color-accent: var(--color-primary, #7c3aed);
+  --color-accent-light: var(--color-primary-light, #8b5cf6);
+  --color-accent-dark: var(--color-primary-dark, #5b21b6);
   --color-gray-850: #1a1a2e;
+  --color-violet-600: var(--color-primary, #7c3aed);
+  --color-violet-500: var(--color-primary, #7c3aed);
+  --color-violet-400: var(--color-primary-light, #a78bfa);
+  --color-violet-300: var(--color-primary-light, #c4b5fd);
+  --color-violet-700: var(--color-primary-dark, #5b21b6);
 }
 
 :root {
@@ -22,6 +27,11 @@
   --color-primary: #7c3aed;
   --color-primary-light: #a78bfa;
   --color-primary-dark: #5b21b6;
+  --color-violet-600: var(--color-primary, #7c3aed);
+  --color-violet-500: var(--color-primary, #7c3aed);
+  --color-violet-400: var(--color-primary-light, #a78bfa);
+  --color-violet-300: var(--color-primary-light, #c4b5fd);
+  --color-violet-700: var(--color-primary-dark, #5b21b6);
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
@@ -46,10 +56,18 @@ html {
 body {
   background-color: var(--background);
   color: var(--color-foreground);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans), 'Inter', system-ui, -apple-system, sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading), 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+code, kbd, samp, pre {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
 }
 
 .glass {

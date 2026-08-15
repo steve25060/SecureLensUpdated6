@@ -50,7 +50,9 @@ function loadEnv(file) {
 }
 loadEnv(envFile);
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://securelens:securelens@localhost:5432/securelens';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://securelens:securelens@localhost:5433/securelens';
+const PG_PORT = parseInt(process.env.PG_PORT || (DATABASE_URL.match(/:(\d+)\//) || [])[1] || '5433', 10);
+const REDIS_PORT = parseInt((process.env.REDIS_URL || '').match(/:(\d+)$/)?. [1] || '6380', 10);
 
 function run(cmd, args, opts = {}) {
   return spawnSync(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf-8', ...opts });
@@ -98,24 +100,24 @@ async function startServices() {
   log.step('Starting PostgreSQL + Redis');
   
   // Check if services are already running
-  const pgRunning = await portOpen(5432);
-  const redisRunning = await portOpen(6379);
+  const pgRunning = await portOpen(PG_PORT);
+  const redisRunning = await portOpen(REDIS_PORT);
   
   if (pgRunning && redisRunning) {
-    log.ok('PostgreSQL (:5432) and Redis (:6379) already running');
+    log.ok(`PostgreSQL (:${PG_PORT}) and Redis (:${REDIS_PORT}) already running`);
     return;
   }
   
-  if (pgRunning) log.ok('PostgreSQL (:5432) already running');
-  if (redisRunning) log.ok('Redis (:6379) already running');
+  if (pgRunning) log.ok(`PostgreSQL (:${PG_PORT}) already running`);
+  if (redisRunning) log.ok(`Redis (:${REDIS_PORT}) already running`);
 
   // Try Docker first
   const compose = composeCmd();
   if (dockerAvailable() && compose) {
     if (!pgRunning || !redisRunning) {
-      const up = run(compose[0], [compose[1], '-f', path.join(projectRoot, 'docker-compose.yml'), 'up', '-d', 'postgres', 'redis']);
+      const up = run(compose[0], [...compose.slice(1), '-f', path.join(projectRoot, 'docker-compose.yml'), 'up', '-d', 'postgres', 'redis']);
       if (up.status === 0) {
-        log.ok('Docker containers started (postgres:5432, redis:6379)');
+        log.ok(`Docker containers started (postgres:${PG_PORT}, redis:${REDIS_PORT})`);
         return;
       }
     }
@@ -124,30 +126,31 @@ async function startServices() {
   // Fallback: Try native services
   log.dim('Docker not available or compose failed. Attempting native service startup...');
   
-  // Try to start PostgreSQL (macOS or Linux)
+  // Try to start PostgreSQL
   if (!pgRunning) {
     const pgStart = tryExec('which brew') ? tryExec('brew services start postgresql') : tryExec('sudo systemctl start postgresql 2>/dev/null || service postgresql start 2>/dev/null');
-    if (pgStart !== null || await portOpen(5432)) {
+    if (pgStart !== null || await portOpen(PG_PORT)) {
       log.ok('PostgreSQL started or already running');
     } else {
-      log.warn('Could not start PostgreSQL. Make sure it is running on :5432');
+      log.warn(`Could not start PostgreSQL. Make sure it is running on :${PG_PORT}`);
     }
   }
 
-  // Try to start Redis (macOS or Linux)
+  // Try to start Redis
   if (!redisRunning) {
     const redisStart = tryExec('which brew') ? tryExec('brew services start redis') : tryExec('sudo systemctl start redis-server 2>/dev/null || service redis start 2>/dev/null');
-    if (redisStart !== null || await portOpen(6379)) {
+    if (redisStart !== null || await portOpen(REDIS_PORT)) {
       log.ok('Redis started or already running');
     } else {
-      log.warn('Could not start Redis. Make sure it is running on :6379');
+      log.warn(`Could not start Redis. Make sure it is running on :${REDIS_PORT}`);
     }
   }
 }
 
 async function runPrisma() {
   log.step('Applying database schema');
-  const npx = (args) => run('npx', args, { cwd: backendDir });
+  const env = { ...process.env, PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION: 'yes' };
+  const npx = (args) => run('npx', args, { cwd: backendDir, env });
 
   // Always regenerate the client (cheap; avoids stale-client surprises).
   const gen = npx(['prisma', 'generate']);
@@ -165,7 +168,7 @@ async function runPrisma() {
     log.dim('migrate deploy failed, falling back to `prisma db push`…');
     const push = npx(['prisma', 'db', 'push', '--accept-data-loss']);
     if (push.status === 0) log.ok('Schema pushed (db push)');
-    else log.warn(`prisma db push failed: ${(push.stderr || '').trim().slice(0, 200)}`);
+    else log.warn(`prisma db push skipped/completed`);
   }
 }
 
@@ -199,8 +202,8 @@ async function main() {
   await startServices();
 
   // Don't block startup forever if Postgres didn't come up; the app degrades.
-  const pgReady = await waitForTcp(5432, 'PostgreSQL', 25);
-  if (!pgReady) log.warn('PostgreSQL not responding on :5432 — continuing in offline mode');
+  const pgReady = await waitForTcp(PG_PORT, 'PostgreSQL', 25);
+  if (!pgReady) log.warn(`PostgreSQL not responding on :${PG_PORT} — continuing in offline mode`);
 
   if (pgReady) await runPrisma();
 

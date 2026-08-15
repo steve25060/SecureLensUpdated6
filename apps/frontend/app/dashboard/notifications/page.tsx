@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, AlertTriangle, CheckCircle, Info, X, Archive, Filter, Mail, MailOpen, Trash2,
-  Clock, Shield, AlertCircle, Zap, Settings, User,
+  Clock, Shield, AlertCircle, Zap, Settings, User, ExternalLink, ArrowRight,
 } from 'lucide-react';
+import Link from 'next/link';
+import { useLiveScanSync } from '@/lib/live-scan-store';
+import { formatRelativeTime, formatExactDateTime } from '@/lib/time-utils';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -25,19 +28,17 @@ interface Notification {
   read: boolean;
   createdAt: string;
   category: 'scan' | 'finding' | 'system' | 'account';
+  target?: string;
+  link?: string;
 }
 
 const SEED_NOTIFICATIONS: Notification[] = [
-  { id: 'n-1', title: 'Critical Finding Detected', message: 'SQL Injection vulnerability found in /api/auth/login endpoint. CVSS: 9.8', type: 'error', read: false, createdAt: '2024-05-16T10:30:00Z', category: 'finding' },
-  { id: 'n-2', title: 'Nuclei Scan Completed', message: 'Scan of acme.com completed with 45 findings (2 critical, 8 high)', type: 'success', read: false, createdAt: '2024-05-16T10:15:00Z', category: 'scan' },
-  { id: 'n-3', title: 'Exposed AWS Access Key', message: 'Hardcoded AWS access key detected in .env.example by Gitleaks scanner', type: 'error', read: false, createdAt: '2024-05-16T09:45:00Z', category: 'finding' },
-  { id: 'n-4', title: 'Weekly Security Report Ready', message: 'Your weekly security posture report for May 10-16 is ready for review', type: 'info', read: false, createdAt: '2024-05-16T09:00:00Z', category: 'system' },
-  { id: 'n-5', title: 'OWASP ZAP Scan Completed', message: 'Active scan of staging.acme.com completed with 12 security alerts', type: 'success', read: true, createdAt: '2024-05-16T08:30:00Z', category: 'scan' },
-  { id: 'n-6', title: 'New Workspace Created', message: 'Frontend-app workspace was created and is ready for scanning', type: 'info', read: true, createdAt: '2024-05-15T16:20:00Z', category: 'system' },
-  { id: 'n-7', title: 'Weak TLS Configuration', message: 'Server supports TLS 1.0 on acme.com. Upgrade to TLS 1.3 recommended', type: 'warning', read: true, createdAt: '2024-05-15T14:10:00Z', category: 'finding' },
-  { id: 'n-8', title: 'GitHub Scan Failed', message: 'Scan of private-repo could not clone repository. Check access permissions.', type: 'error', read: true, createdAt: '2024-05-15T11:45:00Z', category: 'scan' },
-  { id: 'n-9', title: 'Security Score Improved', message: 'Your overall security score increased from 72 to 84 (+12 pts) in the last 7 days', type: 'success', read: true, createdAt: '2024-05-15T09:00:00Z', category: 'system' },
-  { id: 'n-10', title: 'API Key Expiring Soon', message: 'Your Production API key will expire in 14 days. Generate a new one to avoid disruption.', type: 'warning', read: true, createdAt: '2024-05-14T15:30:00Z', category: 'account' },
+  { id: 'n-1', title: 'Critical Finding Detected', message: 'SQL Injection vulnerability found in /api/auth/login endpoint. CVSS: 9.8', type: 'error', read: false, createdAt: new Date(Date.now() - 5 * 60000).toISOString(), category: 'finding', link: '/dashboard/findings' },
+  { id: 'n-2', title: 'Live Audit Completed', message: 'Scan of target website completed with 14 findings (1 critical, 4 high)', type: 'success', read: false, createdAt: new Date(Date.now() - 15 * 60000).toISOString(), category: 'scan', link: '/dashboard/reports' },
+  { id: 'n-3', title: 'Exposed AWS Access Key', message: 'Hardcoded AWS access key detected in .env.example by scanner engine', type: 'error', read: false, createdAt: new Date(Date.now() - 35 * 60000).toISOString(), category: 'finding', link: '/dashboard/findings' },
+  { id: 'n-4', title: 'Security Audit Report Ready', message: 'Your comprehensive executive compliance and vulnerability report is ready for export', type: 'info', read: true, createdAt: new Date(Date.now() - 90 * 60000).toISOString(), category: 'system', link: '/dashboard/reports' },
+  { id: 'n-5', title: 'Weak TLS Configuration', message: 'Target website supports TLS 1.0. Upgrade to TLS 1.3 recommended', type: 'warning', read: true, createdAt: new Date(Date.now() - 180 * 60000).toISOString(), category: 'finding', link: '/dashboard/findings' },
+  { id: 'n-6', title: 'Workspace Posture Updated', message: 'Production security workspace asset inventory synchronized', type: 'info', read: true, createdAt: new Date(Date.now() - 360 * 60000).toISOString(), category: 'system', link: '/dashboard/workspaces' },
 ];
 
 const typeConfig = {
@@ -55,23 +56,157 @@ const categoryConfig = {
 };
 
 export default function NotificationsPage() {
+  const { scans: liveScans, findings: liveFindings, lastUpdated } = useLiveScanSync();
   const [notifications, setNotifications] = useState<Notification[]>(SEED_NOTIFICATIONS);
+  const [deletedNotifIds, setDeletedNotifIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return JSON.parse(localStorage.getItem('sl_deleted_notifications') || '[]');
+      } catch {}
+    }
+    return [];
+  });
+  const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return JSON.parse(localStorage.getItem('sl_read_notifications') || '[]');
+      } catch {}
+    }
+    return [];
+  });
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
 
-  const markAsRead = (id: string) => {
+  useEffect(() => {
+    let isMounted = true;
+    const fetchNotifications = () => {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+      fetch('/api/notifications', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => {
+          if (!isMounted) return;
+          if (Array.isArray(data) && data.length > 0) {
+            const formatted: Notification[] = data.map((n: any) => ({
+              id: n.id,
+              title: n.title,
+              message: n.body || n.message || '',
+              type: (n.type || 'info') as Notification['type'],
+              read: Boolean(n.read),
+              createdAt: n.createdAt || new Date().toISOString(),
+              category: (n.category || 'scan') as Notification['category'],
+            }));
+            setNotifications(formatted);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 3000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const activeNotifications = React.useMemo(() => {
+    const liveItems: Notification[] = [];
+
+    liveScans.forEach((ls) => {
+      liveItems.push({
+        id: `live-notif-scan-${ls.id}`,
+        title: `Live Scan Finished: ${ls.target}`,
+        message: `Security audit completed with ${ls.findingsCount || 0} vulnerabilities detected across ${ls.engines?.length || 5} engines.`,
+        type: ls.findingsCount > 0 ? 'warning' : 'success',
+        read: readNotifIds.includes(`live-notif-scan-${ls.id}`),
+        createdAt: ls.createdAt || new Date().toISOString(),
+        category: 'scan',
+        target: ls.target,
+        link: `/dashboard/live-scan?target=${encodeURIComponent(ls.target)}`,
+      });
+    });
+
+    const critFindings = liveFindings.filter(f => f.severity === 'CRITICAL');
+    critFindings.slice(0, 3).forEach(cf => {
+      liveItems.push({
+        id: `live-notif-crit-${cf.id}`,
+        title: `🔴 Critical Vulnerability: ${cf.title}`,
+        message: `Discovered on target ${cf.target} by ${cf.source}. Immediate remediation required.`,
+        type: 'error',
+        read: readNotifIds.includes(`live-notif-crit-${cf.id}`),
+        createdAt: cf.createdAt || new Date().toISOString(),
+        category: 'finding',
+        target: cf.target,
+        link: `/dashboard/findings?target=${encodeURIComponent(cf.target)}`,
+      });
+    });
+
+    const combined = [...liveItems, ...notifications.map(n => ({
+      ...n,
+      read: n.read || readNotifIds.includes(n.id),
+    }))];
+
+    const uniqueMap = new Map();
+    combined.forEach(item => {
+      if (!uniqueMap.has(item.id) && !deletedNotifIds.includes(item.id)) {
+        uniqueMap.set(item.id, item);
+      }
+    });
+    return Array.from(uniqueMap.values());
+  }, [liveScans, liveFindings, notifications, deletedNotifIds, readNotifIds]);
+
+  const markAsRead = async (id: string) => {
+    setReadNotifIds(prev => {
+      const updated = [...prev, id];
+      if (typeof window !== 'undefined') localStorage.setItem('sl_read_notifications', JSON.stringify(updated));
+      return updated;
+    });
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+    try {
+      await fetch(`/api/notifications/${id}/read`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {}
   };
 
-  const deleteNotification = (id: string) => {
+  const deleteNotification = async (id: string) => {
+    setDeletedNotifIds(prev => {
+      const updated = [...prev, id];
+      if (typeof window !== 'undefined') localStorage.setItem('sl_deleted_notifications', JSON.stringify(updated));
+      return updated;
+    });
     setNotifications(prev => prev.filter(n => n.id !== id));
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+    try {
+      await fetch(`/api/notifications/${id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {}
   };
 
-  const markAllRead = () => {
+  const markAllRead = async () => {
+    const allIds = activeNotifications.map(n => n.id);
+    setReadNotifIds(prev => {
+      const updated = Array.from(new Set([...prev, ...allIds]));
+      if (typeof window !== 'undefined') localStorage.setItem('sl_read_notifications', JSON.stringify(updated));
+      return updated;
+    });
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+    try {
+      await fetch('/api/notifications/read-all', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch {}
   };
 
-  const filtered = notifications
+  const filtered = activeNotifications
     .filter(n => {
       if (filter === 'unread') return !n.read;
       if (filter === 'read') return n.read;
@@ -82,11 +217,12 @@ export default function NotificationsPage() {
       return n.category === categoryFilter;
     });
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = activeNotifications.filter(n => !n.read).length;
 
   const timeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
     if (mins < 60) return `${mins}m ago`;
     const hours = Math.floor(mins / 60);
     if (hours < 24) return `${hours}h ago`;
@@ -107,12 +243,12 @@ export default function NotificationsPage() {
           {unreadCount > 0 && (
             <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               onClick={markAllRead}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs text-gray-400 hover:text-gray-200 hover:bg-white/[0.05] transition-all">
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs text-gray-400 hover:text-gray-200 hover:bg-white/[0.05] transition-all cursor-pointer">
               <MailOpen size={13} /> Mark all read
             </motion.button>
           )}
           <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs text-gray-400 hover:text-gray-200 hover:bg-white/[0.05] transition-all">
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs text-gray-400 hover:text-gray-200 hover:bg-white/[0.05] transition-all cursor-pointer">
             <Archive size={13} /> Archive
           </motion.button>
         </div>
@@ -122,7 +258,7 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-1 bg-white/[0.02] rounded-xl p-1 border border-white/[0.06]">
           {(['all', 'unread', 'read'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all capitalize cursor-pointer ${
                 filter === f ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-gray-500 hover:text-gray-300'
               }`}>
               {f}
@@ -138,7 +274,7 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-1 bg-white/[0.02] rounded-xl p-1 border border-white/[0.06]">
           {(['all', 'scan', 'finding', 'system', 'account'] as const).map(c => (
             <button key={c} onClick={() => setCategoryFilter(c)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize cursor-pointer ${
                 categoryFilter === c ? 'bg-white/[0.06] text-white' : 'text-gray-500 hover:text-gray-300'
               }`}>
               {c === 'all' ? 'All Types' : c}
@@ -179,26 +315,31 @@ export default function NotificationsPage() {
                         {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />}
                       </div>
                       <p className="text-xs text-gray-500 leading-relaxed">{notif.message}</p>
-                      <div className="flex items-center gap-3 mt-2">
-                        <span className="flex items-center gap-1.5 text-[11px] text-gray-600">
-                          <Clock size={10} />{timeAgo(notif.createdAt)}
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        <span className="flex items-center gap-1.5 text-[11px] text-gray-400" title={formatExactDateTime(notif.createdAt)}>
+                          <Clock size={10} className="text-violet-400" />{formatRelativeTime(notif.createdAt)}
                         </span>
                         <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border ${catConfig.bg}`}>
                           <CatIcon size={9} className={catConfig.color} />{catConfig.label}
                         </span>
+                        {notif.link && (
+                          <Link href={notif.link} className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1 font-medium transition-colors ml-auto">
+                            View <ArrowRight size={11} />
+                          </Link>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
                       {!notif.read && (
                         <button onClick={() => markAsRead(notif.id)}
-                          className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-violet-400 transition-colors"
+                          className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-violet-400 transition-colors cursor-pointer"
                           title="Mark as read">
-                          <Mail size={14} />
+                          <MailOpen size={14} />
                         </button>
                       )}
                       <button onClick={() => deleteNotification(notif.id)}
-                        className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-red-400 transition-colors"
-                        title="Delete">
+                        className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-red-400 transition-colors cursor-pointer"
+                        title="Delete notification">
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -209,26 +350,6 @@ export default function NotificationsPage() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      <motion.div variants={itemVariants} className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-semibold text-white">Notification Preferences</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Manage what notifications you receive.</p>
-          </div>
-          <button className="text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1">
-            Configure <ArrowRight size={11} />
-          </button>
-        </div>
-      </motion.div>
     </motion.div>
-  );
-}
-
-function ArrowRight({ size, className }: { size: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M5 12h14" /><path d="m12 5 7 7-7 7" />
-    </svg>
   );
 }

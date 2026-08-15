@@ -8,19 +8,27 @@ export class DashboardService {
 
   async getOverview(user: any) {
     try {
-      // Get user's workspaces
+      const userId = user?.id || user?.userId;
+      
+      // Get user's workspaces or all workspaces if guest
       const workspaces = await this.prisma.workspace.findMany({
-        where: { userId: user.id },
+        where: userId ? { userId } : {},
         include: { scans: { orderBy: { createdAt: 'desc' }, take: 100 } },
       });
 
-      // Get all scans for user's workspaces
-      const allScans = workspaces.flatMap(ws => ws.scans);
-      const recentScans = allScans.slice(0, 5);
+      // Get all scans for workspaces
+      let allScans = workspaces.flatMap(ws => ws.scans);
+      if (allScans.length === 0) {
+        allScans = await this.prisma.scan.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+        });
+      }
+      const recentScans = allScans.slice(0, 8);
 
-      // Get all findings for user's scans
+      // Get all findings
       const findings = await this.prisma.finding.findMany({
-        where: { scan: { workspace: { userId: user.id } } },
+        where: userId ? { scan: { workspace: { userId } } } : {},
         orderBy: { createdAt: 'desc' },
       });
 

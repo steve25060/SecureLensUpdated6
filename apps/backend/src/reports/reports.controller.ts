@@ -1,27 +1,41 @@
 import { Controller, Get, Post, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
 import { ReportsService } from './reports.service';
 
-interface AuthRequest { user?: { userId?: string } }
+interface AuthRequest { user?: { userId?: string; id?: string } }
 
 @Controller('reports')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(OptionalJwtAuthGuard)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get()
   findAll(@Req() req: AuthRequest) {
-    return this.reportsService.findAll(req.user?.userId ?? 'demo-user-1');
+    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    return this.reportsService.findAll(userId);
   }
 
   @Get('stats')
   getStats(@Req() req: AuthRequest) {
-    return this.reportsService.getStats(req.user?.userId ?? 'demo-user-1');
+    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    return this.reportsService.getStats(userId);
   }
 
   @Post()
   create(@Req() req: AuthRequest, @Body() body: any) {
-    return this.reportsService.create(req.user?.userId ?? 'demo-user-1', body ?? {});
+    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    return this.reportsService.create(userId, body ?? {});
+  }
+
+  @Delete('bulk')
+  removeBulk(@Body() body: { ids: string[] }) {
+    return this.reportsService.removeBulk(body?.ids || []);
+  }
+
+  @Delete('all')
+  removeAll(@Req() req: AuthRequest) {
+    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    return this.reportsService.removeAll(userId);
   }
 
   @Get(':id')

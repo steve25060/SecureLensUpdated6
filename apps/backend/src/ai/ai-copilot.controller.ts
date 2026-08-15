@@ -3,22 +3,108 @@ import {
   Post,
   Get,
   Body,
-  Param,
   UseGuards,
   HttpCode,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { AICopilotService } from './ai-copilot.service';
+import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
+import { AICopilotService, AIProvider, ChatMessage } from './ai-copilot.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UnifiedFinding } from '@securelens/findings-schema';
 
-@Controller('api/ai-copilot')
-@UseGuards(JwtAuthGuard)
+@Controller('ai-copilot')
+@UseGuards(OptionalJwtAuthGuard)
 export class AICopilotController {
   constructor(
     private aiCopilot: AICopilotService,
     private prisma: PrismaService,
   ) {}
+
+  /**
+   * Real-time Interactive Chat
+   */
+  @Post('chat')
+  @HttpCode(200)
+  async chat(
+    @Body()
+    body: {
+      messages: ChatMessage[];
+      findingId?: string;
+      findingContext?: any;
+      scanContext?: any;
+      target?: string;
+      provider?: AIProvider;
+      apiKey?: string;
+      model?: string;
+      keysMap?: Record<string, { apiKey: string; model?: string }>;
+    },
+  ) {
+    try {
+      let findingContext = body.findingContext;
+      if (body.findingId && !findingContext && this.prisma.connected) {
+        findingContext = await this.prisma.finding.findUnique({
+          where: { id: body.findingId },
+        });
+      }
+
+      const result = await this.aiCopilot.chat({
+        messages: body.messages || [],
+        findingContext,
+        scanContext: body.scanContext,
+        target: body.target,
+        provider: body.provider,
+        apiKey: body.apiKey,
+        model: body.model,
+        keysMap: body.keysMap,
+      });
+
+      return result;
+    } catch (error: any) {
+      return {
+        reply: `AI Assistant unavailable: ${error.message}`,
+        provider: 'error',
+        model: 'none',
+      };
+    }
+  }
+
+  /**
+   * Test AI API key connection
+   */
+  @Post('test')
+  @HttpCode(200)
+  async testConnection(
+    @Body() body: { provider: AIProvider; apiKey: string; model?: string },
+  ) {
+    return this.aiCopilot.testConnection(body.provider, body.apiKey, body.model);
+  }
+
+  /**
+   * Update runtime configuration
+   */
+  @Post('config')
+  @HttpCode(200)
+  async updateConfig(
+    @Body()
+    body: {
+      primaryProvider?: AIProvider;
+      failoverOrder?: AIProvider[];
+      keys?: Partial<Record<AIProvider, { apiKey: string; model?: string; enabled?: boolean }>>;
+      provider?: AIProvider;
+      apiKey?: string;
+      model?: string;
+    },
+  ) {
+    this.aiCopilot.setRuntimeConfig(body);
+    return { success: true, status: this.aiCopilot.getStatus() };
+  }
+
+  /**
+   * Check if AI is configured and list supported providers
+   */
+  @Get('status')
+  getAIStatus() {
+    return this.aiCopilot.getStatus();
+  }
 
   /**
    * Explain a finding
@@ -35,19 +121,19 @@ export class AICopilotController {
         return { error: 'Finding not found' };
       }
 
-      // Convert to UnifiedFinding format for AI service
       const unifiedFinding = this.convertToUnifiedFinding(finding);
       const explanation = await this.aiCopilot.explainFinding(unifiedFinding);
 
-      // Save explanation to database
-      await this.prisma.finding.update({
-        where: { id: body.findingId },
-        data: { aiExplanation: explanation },
-      });
+      if (this.prisma.connected) {
+        await this.prisma.finding.update({
+          where: { id: body.findingId },
+          data: { aiExplanation: explanation },
+        }).catch(() => {});
+      }
 
       return { explanation };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
+    } catch (error: any) {
+      return { error: error.message || String(error) };
     }
   }
 
@@ -69,15 +155,16 @@ export class AICopilotController {
       const unifiedFinding = this.convertToUnifiedFinding(finding);
       const remediation = await this.aiCopilot.suggestRemediation(unifiedFinding);
 
-      // Save remediation to database
-      await this.prisma.finding.update({
-        where: { id: body.findingId },
-        data: { remediation },
-      });
+      if (this.prisma.connected) {
+        await this.prisma.finding.update({
+          where: { id: body.findingId },
+          data: { remediation },
+        }).catch(() => {});
+      }
 
       return { remediation };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
+    } catch (error: any) {
+      return { error: error.message || String(error) };
     }
   }
 
@@ -100,8 +187,8 @@ export class AICopilotController {
       const scenario = await this.aiCopilot.explainAttackScenario(unifiedFinding);
 
       return { scenario };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
+    } catch (error: any) {
+      return { error: error.message || String(error) };
     }
   }
 
@@ -124,8 +211,8 @@ export class AICopilotController {
       const code = await this.aiCopilot.generateSecureCodeExample(unifiedFinding);
 
       return { code };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
+    } catch (error: any) {
+      return { error: error.message || String(error) };
     }
   }
 
@@ -153,20 +240,9 @@ export class AICopilotController {
       );
 
       return { answer };
-    } catch (error) {
-      return { error: error instanceof Error ? error.message : String(error) };
+    } catch (error: any) {
+      return { error: error.message || String(error) };
     }
-  }
-
-  /**
-   * Check if AI is configured
-   */
-  @Get('status')
-  getAIStatus() {
-    return {
-      configured: this.aiCopilot.isAIConfigured(),
-      provider: this.aiCopilot.getProvider(),
-    };
   }
 
   /**

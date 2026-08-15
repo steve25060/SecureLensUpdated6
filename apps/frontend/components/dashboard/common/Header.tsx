@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, HelpCircle, ChevronDown, LogOut, User, Settings, Moon, Sun, CheckCircle, AlertTriangle, Info, X } from 'lucide-react';
+import { Search, Bell, HelpCircle, ChevronDown, LogOut, User, Settings, Moon, Sun, CheckCircle, AlertTriangle, Info, X, Clock, Radio } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
+import { useLiveClock } from '@/lib/time-utils';
 
 interface User {
   name?: string;
@@ -44,6 +45,7 @@ const Header: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const pageTitle = PAGE_TITLES[pathname] || 'Dashboard';
+  const liveClock = useLiveClock(1000);
 
   useEffect(() => {
     const loadUserData = () => {
@@ -131,6 +133,23 @@ const Header: React.FC = () => {
             {pathname === '/dashboard' ? 'Welcome back! Here\'s your security overview.' : `Manage your ${pageTitle.toLowerCase()}`}
           </p>
         </div>
+      </div>
+
+      {/* Real-time Clock & Live Engine Sync Status */}
+      <div className="hidden lg:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        <div className="flex items-center gap-1.5 text-gray-300 font-mono text-[12px]">
+          <Clock size={12} className="text-gray-400" />
+          <span className="font-semibold text-white">{liveClock.timeString}</span>
+        </div>
+        <span className="text-gray-600 font-normal">|</span>
+        <span className="text-[11px] text-gray-400 font-sans">{liveClock.dateString}</span>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+          Live Sync
+        </span>
       </div>
 
       <div className="flex items-center gap-2.5">

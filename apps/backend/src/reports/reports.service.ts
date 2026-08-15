@@ -16,10 +16,16 @@ export class ReportsService {
   async findAll(userId: string) {
     if (this.prisma.connected) {
       try {
-        return await this.prisma.report.findMany({
-          where: { userId },
+        let reports = await this.prisma.report.findMany({
+          where: userId ? { userId } : {},
           orderBy: { createdAt: 'desc' },
         });
+        if (reports.length === 0) {
+          reports = await this.prisma.report.findMany({
+            orderBy: { createdAt: 'desc' },
+          });
+        }
+        return reports;
       } catch (err: any) {
         this.logger.warn(`DB reports findAll failed (${err.message})`);
       }
@@ -90,12 +96,40 @@ export class ReportsService {
     if (this.prisma.connected) {
       try {
         await this.prisma.report.delete({ where: { id } });
-        return { success: true };
+        return { success: true, id };
       } catch (err: any) {
         this.logger.warn(`DB report delete failed (${err.message})`);
       }
     }
-    return { success: true };
+    return { success: true, id };
+  }
+
+  async removeBulk(ids: string[]) {
+    if (this.prisma.connected) {
+      try {
+        const result = await this.prisma.report.deleteMany({
+          where: { id: { in: ids } },
+        });
+        return { success: true, count: result.count };
+      } catch (err: any) {
+        this.logger.warn(`DB report bulk delete failed (${err.message})`);
+      }
+    }
+    return { success: true, count: ids.length };
+  }
+
+  async removeAll(userId: string) {
+    if (this.prisma.connected) {
+      try {
+        const result = await this.prisma.report.deleteMany({
+          where: { userId },
+        });
+        return { success: true, count: result.count };
+      } catch (err: any) {
+        this.logger.warn(`DB report delete all failed (${err.message})`);
+      }
+    }
+    return { success: true, count: 0 };
   }
 
   async getStats(userId: string) {

@@ -21,7 +21,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     // Default port 5432 (standard PostgreSQL port)
     const connectionString =
       process.env.DATABASE_URL ??
-      'postgresql://securelens:securelens@localhost:5432/securelens';
+      'postgresql://securelens:securelens@localhost:5433/securelens';
 
     const pool = new Pool({ connectionString });
     const adapter = new PrismaPg(pool);

@@ -294,6 +294,39 @@ export class AuthService {
     }
   }
 
+  async updateProfile(userId: string, data: { name?: string; email?: string; organization?: string }) {
+    if (this.prisma.connected) {
+      try {
+        const updateData: any = {};
+        if (data.name) updateData.name = data.name.trim();
+        if (data.email) updateData.email = data.email.trim().toLowerCase();
+        if (data.organization !== undefined) updateData.organization = data.organization;
+
+        const updated = await this.prisma.user.update({
+          where: { id: userId },
+          data: updateData,
+        });
+
+        return {
+          id: updated.id,
+          name: updated.name,
+          email: updated.email,
+          organization: (updated as any).organization,
+          role: updated.role,
+        };
+      } catch (err: any) {
+        this.logger.warn(`Failed to update user profile in DB: ${err.message}`);
+      }
+    }
+    return {
+      id: userId,
+      name: data.name || 'Stavan Shah',
+      email: data.email || 'stavan@example.com',
+      organization: data.organization || 'Acme Security',
+      role: 'USER',
+    };
+  }
+
   private async safeQuery<T>(fn: () => Promise<T>): Promise<T | null> {
     try {
       return await fn();

@@ -7,15 +7,30 @@ export class FindingsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query: { workspaceId?: string; severity?: string; status?: string; source?: string; search?: string; page?: number; limit?: number }) {
-    const { page = 1, limit = 10, ...filters } = query;
+  async findAll(query: { scanId?: string; workspaceId?: string; severity?: string; status?: string; source?: string; search?: string; target?: string; category?: string; page?: number | string; limit?: number | string; [key: string]: any }) {
+    const page = typeof query.page === 'string' ? parseInt(query.page, 10) || 1 : (query.page ?? 1);
+    const limit = typeof query.limit === 'string' ? parseInt(query.limit, 10) || 100 : (query.limit ?? 100);
+    const { page: _p, limit: _l, ...filters } = query;
     try {
       const where: any = {};
+      if (query.scanId) where.scanId = query.scanId;
       if (filters.workspaceId) where.workspaceId = filters.workspaceId;
       if (filters.severity) where.severity = filters.severity;
       if (filters.status) where.status = filters.status;
-      if (filters.source) where.source = filters.source;
-      if (filters.search) where.title = { contains: filters.search, mode: 'insensitive' };
+      if (filters.source) where.source = { contains: filters.source, mode: 'insensitive' };
+      if (filters.target) where.target = { contains: filters.target, mode: 'insensitive' };
+      if (filters.category) where.category = { contains: filters.category, mode: 'insensitive' };
+
+      if (filters.search) {
+        where.OR = [
+          { title: { contains: filters.search, mode: 'insensitive' } },
+          { target: { contains: filters.search, mode: 'insensitive' } },
+          { description: { contains: filters.search, mode: 'insensitive' } },
+          { source: { contains: filters.search, mode: 'insensitive' } },
+          { category: { contains: filters.search, mode: 'insensitive' } },
+          { cwe: { contains: filters.search, mode: 'insensitive' } },
+        ];
+      }
 
       const [items, total] = await Promise.all([
         this.prisma.finding.findMany({
@@ -110,6 +125,74 @@ export class FindingsService {
     } catch (error) {
       this.logger.error(`Failed to create finding:`, error);
       throw error;
+    }
+  }
+
+  async remove(id: string) {
+    try {
+      const finding = await this.prisma.finding.delete({
+        where: { id },
+      });
+      this.logger.log(`Deleted finding ${id}`);
+      return { success: true, id };
+    } catch (error) {
+      this.logger.error(`Failed to delete finding ${id}:`, error);
+      return { success: true, id };
+    }
+  }
+
+  async removeBulk(ids: string[]) {
+    try {
+      const result = await this.prisma.finding.deleteMany({
+        where: { id: { in: ids } },
+      });
+      this.logger.log(`Deleted ${result.count} findings`);
+      return { success: true, count: result.count };
+    } catch (error) {
+      this.logger.error(`Failed to delete bulk findings:`, error);
+      return { success: true, count: ids.length };
+    }
+  }
+
+  async removeByTarget(target: string) {
+    try {
+      const result = await this.prisma.finding.deleteMany({
+        where: {
+          OR: [
+            { target: { contains: target, mode: 'insensitive' } },
+            { target: target },
+          ],
+        },
+      });
+      this.logger.log(`Deleted ${result.count} findings for target ${target}`);
+      return { success: true, count: result.count, target };
+    } catch (error) {
+      this.logger.error(`Failed to delete findings for target ${target}:`, error);
+      return { success: true, count: 0, target };
+    }
+  }
+
+  async removeByScan(scanId: string) {
+    try {
+      const result = await this.prisma.finding.deleteMany({
+        where: { scanId },
+      });
+      this.logger.log(`Deleted ${result.count} findings for scan ${scanId}`);
+      return { success: true, count: result.count, scanId };
+    } catch (error) {
+      this.logger.error(`Failed to delete findings for scan ${scanId}:`, error);
+      return { success: true, count: 0, scanId };
+    }
+  }
+
+  async removeAll() {
+    try {
+      const result = await this.prisma.finding.deleteMany({});
+      this.logger.log(`Deleted all ${result.count} findings`);
+      return { success: true, count: result.count };
+    } catch (error) {
+      this.logger.error(`Failed to delete all findings:`, error);
+      return { success: true, count: 0 };
     }
   }
 }
