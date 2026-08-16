@@ -368,7 +368,7 @@ function SettingsContent() {
 
       // Compile current provider keys into settings
       const compiledAiKeys: Record<string, { apiKey: string; model: string; baseUrl?: string; enabled: boolean }> = {};
-      Object.entries(providerState).forEach(([id, state]) => {
+      Object.entries(providerState).forEach(([id, state]: [string, any]) => {
         compiledAiKeys[id] = {
           apiKey: state.apiKey,
           model: state.model,
