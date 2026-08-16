@@ -106,28 +106,31 @@ export class WorkspacesService {
       }
     }
 
-    let fileList = this.fileStore().filter(w => w.userId === userId);
+    let fileList = this.fileStore();
+    const userFiltered = fileList.filter(w => w.userId === userId);
+    if (userFiltered.length > 0) {
+      return userFiltered;
+    }
+
     if (fileList.length === 0) {
       const now = new Date().toISOString();
       const defaultWs: WorkspaceRecord = {
         id: randomUUID(),
-        name: 'Default Security Workspace',
-        description: 'Primary workspace for live automated scanning',
-        tags: ['production', 'live-scan'],
-        type: 'COMBINED',
-        targetUrl: 'https://example.com',
+        name: 'UptoSkills – Main Web Surface',
+        description: 'Primary production website, API endpoints, and customer authentication portal.',
+        tags: ['production', 'critical', 'web-app'],
+        type: 'WEBSITE',
+        targetUrl: 'https://uptoskills.com',
         repoUrl: null,
         userId,
-        riskScore: 82,
-        findingsCount: 5,
+        riskScore: 84,
+        findingsCount: 6,
         status: 'active',
         createdAt: now,
         updatedAt: now,
       };
-      const store = this.fileStore();
-      store.push(defaultWs);
-      this.writeFile(store);
-      fileList = [defaultWs];
+      fileList = [defaultWs, ...DEMO_SEED.map(s => ({ ...s, id: randomUUID(), userId, createdAt: now, updatedAt: now }))];
+      this.writeFile(fileList);
     }
     return fileList;
   }

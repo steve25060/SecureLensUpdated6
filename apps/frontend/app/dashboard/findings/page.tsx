@@ -8,7 +8,7 @@ import {
   Search, ArrowUpDown, Eye, Clock, FileText, Download, Sparkles,
   Globe, FolderTree, Code, Key, Package, Box, Server,
   ShieldCheck, Lock, Bug, Terminal, Copy, Check, ExternalLink, Filter, GitBranch,
-  Trash2, CheckSquare, Square
+  Trash2, CheckSquare, Square, Radio, Layers
 } from 'lucide-react';
 
 function Github({ size = 14, className = '' }: { size?: number; className?: string }) {
@@ -20,7 +20,9 @@ function Github({ size = 14, className = '' }: { size?: number; className?: stri
   );
 }
 
-import { useLiveScanSync } from '@/lib/live-scan-store';
+import { useLiveScanSync, updateFindingStatus, bulkUpdateFindingStatus } from '@/lib/live-scan-store';
+import { useRealtimeFindingEvents } from '@/hooks/useRealtimeSync';
+import { EventBus } from '@/lib/event-bus';
 import { formatRelativeTime, formatExactDateTime } from '@/lib/time-utils';
 import {
   exportFindingsToCSV,
@@ -46,12 +48,12 @@ export interface Finding {
   description?: string;
   createdAt: string;
   scanId?: string;
-  targetType?: 'WEBSITE' | 'GITHUB';
+  targetType?: 'WEBSITE' | 'GITHUB' | 'COMBINED';
 }
 
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
 export type FindingStatus = 'NEW' | 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED' | 'FALSE_POSITIVE';
-export type TargetTypeFilter = 'ALL' | 'WEBSITE' | 'GITHUB';
+export type TargetTypeFilter = 'ALL' | 'WEBSITE' | 'GITHUB' | 'COMBINED';
 
 const getDynamicISODate = (daysAgo: number) => {
   const d = new Date();
@@ -64,9 +66,20 @@ export function isGitHubAsset(target: string, source?: string): boolean {
   const t = target.toLowerCase();
   const s = (source || '').toLowerCase();
   if (t.includes('github.com') || t.includes('gitlab.com') || t.includes('.git') || t.startsWith('git@')) return true;
-  if (s.includes('semgrep') || s.includes('gitleaks') || s.includes('trivy') || s.includes('checkov') || s.includes('repository') || s.includes('cicd') || s.includes('container hardening') || s.includes('license')) return true;
+  if (s.includes('semgrep') || s.includes('gitleaks') || s.includes('trivy') || s.includes('checkov') || s.includes('repository') || s.includes('cicd') || s.includes('container hardening') || s.includes('license') || s.includes('code ast')) return true;
   if (t.includes('/') && !t.startsWith('http://') && !t.startsWith('https://') && !t.includes('.')) return true;
   return false;
+}
+
+export function inferFindingTargetType(target: string = '', source: string = '', rawTargetType?: string): 'WEBSITE' | 'GITHUB' | 'COMBINED' {
+  if (rawTargetType === 'COMBINED') return 'COMBINED';
+  if (rawTargetType === 'GITHUB') return 'GITHUB';
+  if (rawTargetType === 'WEBSITE') return 'WEBSITE';
+  const t = (target || '').toLowerCase();
+  const s = (source || '').toLowerCase();
+  if (t.includes('\n') || t.includes('\r') || t.includes(' + ') || t.includes(' & ') || t.startsWith('comb-') || s.includes('combined') || ((t.includes('http://') || t.includes('https://')) && t.includes('github.com'))) return 'COMBINED';
+  if (isGitHubAsset(target, source)) return 'GITHUB';
+  return 'WEBSITE';
 }
 
 const SEED_FINDINGS: Finding[] = [
@@ -116,6 +129,7 @@ function FindingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { findings: liveFindings, lastUpdated } = useLiveScanSync();
+  const { findingAdded, findingDeleted, totalFindingsAdded } = useRealtimeFindingEvents();
 
   const [findings, setFindings] = useState<Finding[]>([]);
   const [hasLoadedApi, setHasLoadedApi] = useState(false);
@@ -132,6 +146,8 @@ function FindingsContent() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [fetchTrigger, setFetchTrigger] = useState<number>(Date.now());
+  const [isLive, setIsLive] = useState(false);
+  const [newFindingIds, setNewFindingIds] = useState<Set<string>>(new Set());
   const [confirmModal, setConfirmModal] = useState<{
     open: boolean;
     type: 'single' | 'bulk' | 'target' | 'all';
@@ -145,6 +161,50 @@ function FindingsContent() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
   };
+
+  // Real-time event listener for new findings
+  useEffect(() => {
+    if (findingAdded && typeof findingAdded === 'object') {
+      setIsLive(true);
+      const fId = findingAdded.id;
+      if (fId) {
+        setNewFindingIds(prev => new Set([...prev, fId]));
+        // Auto-remove animation after 2 seconds
+        setTimeout(() => {
+          setNewFindingIds(prev => {
+            const next = new Set(prev);
+            next.delete(fId);
+            return next;
+          });
+        }, 2000);
+      }
+      showToast(`🔴 New ${findingAdded.severity || 'security'} finding: ${findingAdded.title || 'Vulnerability detected'}`);
+    }
+  }, [findingAdded]);
+
+  // Handle deletion events in real-time
+  useEffect(() => {
+    if (findingDeleted && typeof findingDeleted === 'object') {
+      const fId = findingDeleted.id;
+      if (fId) {
+        setFindings(prev => prev.filter(f => f.id !== fId));
+        setNewFindingIds(prev => {
+          const next = new Set(prev);
+          next.delete(fId);
+          return next;
+        });
+      }
+      showToast(`Deleted finding: ${findingDeleted.title || fId || ''}`);
+    }
+  }, [findingDeleted]);
+
+  // Manage live indicator timeout
+  useEffect(() => {
+    if (isLive) {
+      const timer = setTimeout(() => setIsLive(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLive]);
 
   const getAuthHeaders = () => {
     const token = typeof window !== 'undefined' ? (localStorage.getItem('access_token') || localStorage.getItem('sl_token')) : null;
@@ -216,6 +276,37 @@ function FindingsContent() {
     }
   };
 
+  const handleUpdateStatus = async (id: string, newStatus: FindingStatus) => {
+    updateFindingStatus(id, newStatus as any);
+    setFindings(prev => prev.map(f => f.id === id ? { ...f, status: newStatus } : f));
+    if (selectedFinding?.id === id) {
+      setSelectedFinding(prev => prev ? { ...prev, status: newStatus } : null);
+    }
+    showToast(`✓ Finding status changed to ${statusConfig[newStatus]?.label || newStatus}`);
+    
+    // Background sync to backend
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('access_token') || localStorage.getItem('sl_token')) : null;
+    fetch(`/api/findings/${id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ status: newStatus }),
+    }).catch(() => {});
+  };
+
+  const handleBulkStatus = async (newStatus: FindingStatus) => {
+    if (selectedIds.length === 0) return;
+    bulkUpdateFindingStatus(selectedIds, newStatus as any);
+    setFindings(prev => prev.map(f => selectedIds.includes(f.id) ? { ...f, status: newStatus } : f));
+    if (selectedFinding && selectedIds.includes(selectedFinding.id)) {
+      setSelectedFinding(prev => prev ? { ...prev, status: newStatus } : null);
+    }
+    showToast(`✓ Marked ${selectedIds.length} findings as ${statusConfig[newStatus]?.label || newStatus}`);
+    setSelectedIds([]);
+  };
+
   const handleAIExplanation = (finding: Finding) => {
     const params = new URLSearchParams({
       tab: 'chat',
@@ -246,7 +337,6 @@ function FindingsContent() {
     });
     router.push(`/dashboard/ai-copilot?${params.toString()}`);
   };
-
   const handleCopyRemediation = (text?: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -255,14 +345,51 @@ function FindingsContent() {
   };
 
   useEffect(() => {
+    const qScanId = searchParams.get('scanId');
     const qTarget = searchParams.get('target');
-    if (qTarget) {
-      setSelectedTarget(qTarget);
-      if (isGitHubAsset(qTarget)) {
+    const qType = searchParams.get('type')?.toUpperCase();
+
+    if (qType && ['ALL', 'WEBSITE', 'GITHUB', 'COMBINED'].includes(qType)) {
+      setTargetTypeFilter(qType as any);
+    } else if (qScanId) {
+      // When navigated from a specific scan, start with ALL to avoid accidental exclusion
+      setTargetTypeFilter('ALL');
+    } else if (qTarget) {
+      if (qTarget.includes('\n') || qTarget.includes(' + ') || (qTarget.includes('http') && qTarget.includes('github'))) {
+        setTargetTypeFilter('COMBINED');
+      } else if (isGitHubAsset(qTarget)) {
         setTargetTypeFilter('GITHUB');
       } else {
         setTargetTypeFilter('WEBSITE');
       }
+    } else {
+      setTargetTypeFilter('ALL');
+    }
+
+    if (qTarget) {
+      setSelectedTarget(qTarget);
+    } else {
+      setSelectedTarget('ALL');
+    }
+
+    const qSev = (searchParams.get('severity') || searchParams.get('sev'))?.toUpperCase();
+    if (qSev && ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'ALL'].includes(qSev)) {
+      setSelectedSeverity(qSev as any);
+    }
+
+    const qStatus = (searchParams.get('status') || searchParams.get('st'))?.toUpperCase();
+    if (qStatus && ['NEW', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'FALSE_POSITIVE', 'ALL'].includes(qStatus)) {
+      setSelectedStatus(qStatus as any);
+    }
+
+    const qCat = searchParams.get('category');
+    if (qCat) {
+      setSelectedCategory(qCat);
+    }
+
+    const qSearch = searchParams.get('search') || searchParams.get('q');
+    if (qSearch) {
+      setSearchQuery(qSearch);
     }
   }, [searchParams]);
 
@@ -272,7 +399,7 @@ function FindingsContent() {
     const fetchFindings = () => {
       const scanId = searchParams.get('scanId');
       const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
-      const url = `/api/findings?limit=250${scanId ? `&scanId=${scanId}` : ''}`;
+      const url = `/api/findings?limit=500${scanId ? `&scanId=${scanId}` : ''}`;
 
       fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -282,7 +409,8 @@ function FindingsContent() {
           if (!isMounted) return;
           const list = Array.isArray(data) ? data : (data?.findings || data?.items || []);
           const formatted: Finding[] = list.map((item: any) => {
-            const isGh = isGitHubAsset(item.target || '', item.source || '');
+            const rawType = item.targetType || (item.scanType ? String(item.scanType).toUpperCase() : undefined);
+            const tType = inferFindingTargetType(item.target || '', item.source || '', rawType);
             return {
               id: item.id,
               title: item.title,
@@ -290,7 +418,7 @@ function FindingsContent() {
               source: item.source || 'scanner',
               target: item.target || 'target asset',
               status: item.status || 'NEW',
-              category: item.category || (isGh ? 'Code Security' : 'Web Security'),
+              category: item.category || (tType === 'GITHUB' ? 'Code Security' : tType === 'COMBINED' ? 'Correlated Intelligence' : 'Web Security'),
               cvss: item.cvss ? Number(item.cvss) : undefined,
               cwe: item.cwe,
               owasp: item.owasp,
@@ -299,7 +427,7 @@ function FindingsContent() {
               description: item.description || '',
               createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date(item.createdAt || Date.now()).toISOString(),
               scanId: item.scanId,
-              targetType: isGh ? 'GITHUB' : 'WEBSITE',
+              targetType: tType,
             };
           });
           setFindings(formatted);
@@ -327,7 +455,8 @@ function FindingsContent() {
 
     // 1. Add findings from live store (contains real-time scanned items)
     liveFindings.forEach(lf => {
-      const isGh = isGitHubAsset(lf.target || '', lf.source || '');
+      const rawType = lf.targetType || ((lf as any).scanType ? String((lf as any).scanType).toUpperCase() : undefined);
+      const tType = inferFindingTargetType(lf.target || '', lf.source || '', rawType);
       allMap.set(lf.id, {
         id: lf.id,
         title: lf.title,
@@ -335,7 +464,7 @@ function FindingsContent() {
         source: lf.source || 'SecureLens Engine',
         target: lf.target || 'target asset',
         status: lf.status || 'NEW',
-        category: lf.category || (isGh ? 'Code Security' : 'Web Security'),
+        category: lf.category || (tType === 'GITHUB' ? 'Code Security' : tType === 'COMBINED' ? 'Correlated Intelligence' : 'Web Security'),
         cvss: lf.cvss ? Number(lf.cvss) : undefined,
         cwe: lf.cwe,
         owasp: lf.owasp,
@@ -344,7 +473,7 @@ function FindingsContent() {
         description: lf.description || '',
         createdAt: typeof lf.createdAt === 'string' ? lf.createdAt : new Date().toISOString(),
         scanId: lf.scanId,
-        targetType: isGh ? 'GITHUB' : 'WEBSITE',
+        targetType: tType,
       });
     });
 
@@ -357,19 +486,33 @@ function FindingsContent() {
 
     let list = Array.from(allMap.values());
 
-    // 3. Fallback only if completely empty and user has not created any scans
-    if (list.length === 0 && !hasLoadedApi) {
-      list = SEED_FINDINGS;
-    }
-
     if (scanId) {
-      const filteredByScan = list.filter(f => f.scanId === scanId);
-      if (filteredByScan.length > 0) return filteredByScan;
+      const scanMatches = list.filter(f => f.scanId === scanId || f.id?.includes(scanId));
+      if (scanMatches.length > 0) {
+        list = scanMatches;
+      } else if (targetParam) {
+        const tp = targetParam.trim().toLowerCase().replace(/[\r\n]+/g, ' ');
+        const targetMatches = list.filter(f => {
+          const ft = (f.target || '').trim().toLowerCase();
+          return ft === tp || ft.includes(tp) || tp.includes(ft);
+        });
+        if (targetMatches.length > 0) {
+          list = targetMatches;
+        }
+      }
+    } else if (targetParam) {
+      const tp = targetParam.trim().toLowerCase().replace(/[\r\n]+/g, ' ');
+      const targetMatches = list.filter(f => {
+        const ft = (f.target || '').trim().toLowerCase();
+        return ft === tp || ft.includes(tp) || tp.includes(ft);
+      });
+      if (targetMatches.length > 0) {
+        list = targetMatches;
+      }
     }
 
-    if (targetParam) {
-      const filteredByTarget = list.filter(f => f.target?.toLowerCase().includes(targetParam.toLowerCase()));
-      if (filteredByTarget.length > 0) return filteredByTarget;
+    if (list.length === 0 && !scanId && !targetParam) {
+      list = SEED_FINDINGS;
     }
 
     return list;
@@ -379,8 +522,12 @@ function FindingsContent() {
   const typeCounts = useMemo(() => {
     let websiteCount = 0;
     let githubCount = 0;
+    let combinedCount = 0;
     activeFindings.forEach(f => {
-      if (f.targetType === 'GITHUB' || isGitHubAsset(f.target, f.source)) {
+      const tType = f.targetType || inferFindingTargetType(f.target, f.source);
+      if (tType === 'COMBINED') {
+        combinedCount++;
+      } else if (tType === 'GITHUB') {
         githubCount++;
       } else {
         websiteCount++;
@@ -390,20 +537,22 @@ function FindingsContent() {
       all: activeFindings.length,
       website: websiteCount,
       github: githubCount,
+      combined: combinedCount,
     };
   }, [activeFindings]);
 
   // Unique Targets within current type filter
   const availableTargets = useMemo(() => {
-    const counts: Record<string, { count: number; isGh: boolean }> = {};
+    const counts: Record<string, { count: number; isGh: boolean; isComb: boolean }> = {};
     activeFindings.forEach(f => {
-      const isGh = f.targetType === 'GITHUB' || isGitHubAsset(f.target, f.source);
-      if (targetTypeFilter === 'WEBSITE' && isGh) return;
-      if (targetTypeFilter === 'GITHUB' && !isGh) return;
+      const tType = f.targetType || inferFindingTargetType(f.target, f.source);
+      if (targetTypeFilter === 'WEBSITE' && tType !== 'WEBSITE') return;
+      if (targetTypeFilter === 'GITHUB' && tType !== 'GITHUB') return;
+      if (targetTypeFilter === 'COMBINED' && tType !== 'COMBINED') return;
 
       if (f.target) {
         if (!counts[f.target]) {
-          counts[f.target] = { count: 0, isGh };
+          counts[f.target] = { count: 0, isGh: tType === 'GITHUB', isComb: tType === 'COMBINED' };
         }
         counts[f.target].count += 1;
       }
@@ -412,6 +561,7 @@ function FindingsContent() {
       target,
       count: info.count,
       isGh: info.isGh,
+      isComb: info.isComb,
     }));
   }, [activeFindings, targetTypeFilter]);
 
@@ -426,14 +576,22 @@ function FindingsContent() {
 
   // Filtered findings list
   const filtered = useMemo(() => {
+    const scanId = searchParams.get('scanId');
     return activeFindings
       .filter(f => {
-        const isGh = f.targetType === 'GITHUB' || isGitHubAsset(f.target, f.source);
-        if (targetTypeFilter === 'WEBSITE' && isGh) return false;
-        if (targetTypeFilter === 'GITHUB' && !isGh) return false;
+        if (scanId && targetTypeFilter === 'ALL') return true;
+        const tType = f.targetType || inferFindingTargetType(f.target, f.source);
+        if (targetTypeFilter === 'WEBSITE' && tType !== 'WEBSITE') return false;
+        if (targetTypeFilter === 'GITHUB' && tType !== 'GITHUB') return false;
+        if (targetTypeFilter === 'COMBINED' && tType !== 'COMBINED') return false;
         return true;
       })
-      .filter(f => selectedTarget === 'ALL' || f.target === selectedTarget)
+      .filter(f => {
+        if (selectedTarget === 'ALL') return true;
+        const st = selectedTarget.trim().toLowerCase().replace(/[\r\n]+/g, ' ').replace(/\/+$/, '');
+        const ft = (f.target || '').trim().toLowerCase().replace(/[\r\n]+/g, ' ').replace(/\/+$/, '');
+        return ft === st || ft.includes(st) || st.includes(ft);
+      })
       .filter(f => selectedSeverity === 'ALL' || f.severity === selectedSeverity)
       .filter(f => selectedStatus === 'ALL' || f.status === selectedStatus)
       .filter(f => selectedCategory === 'ALL' || f.category === selectedCategory)
@@ -454,13 +612,14 @@ function FindingsContent() {
         }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [activeFindings, targetTypeFilter, selectedTarget, selectedSeverity, selectedStatus, selectedCategory, searchQuery, sortBy]);
+  }, [activeFindings, targetTypeFilter, selectedTarget, selectedSeverity, selectedStatus, selectedCategory, searchQuery, sortBy, searchParams]);
 
   const severityCounts = useMemo(() => {
     const list = activeFindings.filter(f => {
-      const isGh = f.targetType === 'GITHUB' || isGitHubAsset(f.target, f.source);
-      if (targetTypeFilter === 'WEBSITE' && isGh) return false;
-      if (targetTypeFilter === 'GITHUB' && !isGh) return false;
+      const tType = f.targetType || inferFindingTargetType(f.target, f.source);
+      if (targetTypeFilter === 'WEBSITE' && tType !== 'WEBSITE') return false;
+      if (targetTypeFilter === 'GITHUB' && tType !== 'GITHUB') return false;
+      if (targetTypeFilter === 'COMBINED' && tType !== 'COMBINED') return false;
       return true;
     });
     return Object.entries(severityConfig).reduce((acc, [key]) => {
@@ -493,9 +652,10 @@ function FindingsContent() {
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -10, x: 400 }}
+            animate={{ opacity: 1, y: 0, x: 0 }}
+            exit={{ opacity: 0, y: -10, x: 400 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-violet-950/90 border border-violet-500/40 text-violet-200 text-sm shadow-2xl backdrop-blur-xl"
           >
             <CheckCircle2 size={16} className="text-emerald-400" />
@@ -560,6 +720,15 @@ function FindingsContent() {
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
             Security Findings
+            {isLive && (
+              <motion.span
+                animate={{ opacity: [1, 0.6, 1] }}
+                transition={{ duration: 1, repeat: Infinity }}
+                className="text-xs px-2.5 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/40 font-bold flex items-center gap-1"
+              >
+                <Radio size={10} className="fill-red-400" /> LIVE
+              </motion.span>
+            )}
             {selectedTarget !== 'ALL' && (
               <span className="text-xs px-2.5 py-1 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20 font-medium">
                 {selectedTarget}
@@ -683,6 +852,21 @@ function FindingsContent() {
           <Github size={15} /> GitHub Repositories
           <span className="text-xs px-2 py-0.5 rounded-full bg-black/30 font-semibold">{typeCounts.github}</span>
         </button>
+
+        <button
+          onClick={() => {
+            setTargetTypeFilter('COMBINED');
+            setSelectedTarget('ALL');
+          }}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+            targetTypeFilter === 'COMBINED'
+              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/25 ring-1 ring-indigo-400/40'
+              : 'bg-white/[0.03] text-gray-400 border border-white/[0.05] hover:bg-white/[0.06] hover:text-white'
+          }`}
+        >
+          <Layers size={15} /> Combined Scans
+          <span className="text-xs px-2 py-0.5 rounded-full bg-black/30 font-semibold">{typeCounts.combined}</span>
+        </button>
       </motion.div>
 
       {/* Target Quick Filter Bar */}
@@ -702,19 +886,21 @@ function FindingsContent() {
             All {targetTypeFilter === 'GITHUB' ? 'Repositories' : (targetTypeFilter === 'WEBSITE' ? 'Websites' : 'Targets')} ({filtered.length})
           </button>
 
-          {availableTargets.map(({ target, count, isGh }) => (
+          {availableTargets.map(({ target, count, isGh, isComb }) => (
             <div key={target} className="flex items-center gap-0.5">
               <button
                 onClick={() => setSelectedTarget(target)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 whitespace-nowrap ${
                   selectedTarget === target
-                    ? isGh
+                    ? isComb
+                      ? 'bg-purple-600/20 text-purple-300 border-purple-500/40 shadow-sm ring-1 ring-purple-500/30'
+                      : isGh
                       ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 shadow-sm ring-1 ring-emerald-500/30'
                       : 'bg-sky-600/20 text-sky-300 border-sky-500/40 shadow-sm ring-1 ring-sky-500/30'
                     : 'bg-white/[0.02] text-gray-400 border-white/[0.06] hover:bg-white/[0.04]'
                 }`}
               >
-                {isGh ? <Github size={12} className="text-emerald-400" /> : <Globe size={12} className="text-sky-400" />}
+                {isComb ? <Layers size={12} className="text-purple-400" /> : isGh ? <Github size={12} className="text-emerald-400" /> : <Globe size={12} className="text-sky-400" />}
                 <span className="truncate max-w-[200px]">{target.replace(/^https?:\/\//, '')}</span>
                 <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10 font-semibold">{count}</span>
               </button>
@@ -901,18 +1087,36 @@ function FindingsContent() {
             </div>
 
             {selectedIds.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
-                  onClick={() => setSelectedIds([])}
-                  className="px-2.5 py-1 text-[11px] text-gray-400 hover:text-white transition-colors cursor-pointer"
+                  onClick={() => handleBulkStatus('ACKNOWLEDGED')}
+                  className="px-2.5 py-1 text-[11px] rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 border border-yellow-500/20 font-medium transition-colors cursor-pointer"
                 >
-                  Deselect
+                  Acknowledge ({selectedIds.length})
+                </button>
+                <button
+                  onClick={() => handleBulkStatus('RESOLVED')}
+                  className="px-2.5 py-1 text-[11px] rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-medium transition-colors cursor-pointer"
+                >
+                  Resolve ({selectedIds.length})
+                </button>
+                <button
+                  onClick={() => handleBulkStatus('FALSE_POSITIVE')}
+                  className="px-2.5 py-1 text-[11px] rounded-lg bg-gray-500/10 hover:bg-gray-500/20 text-gray-300 border border-gray-500/20 font-medium transition-colors cursor-pointer"
+                >
+                  False Positive
                 </button>
                 <button
                   onClick={() => setConfirmModal({ open: true, type: 'bulk', count: selectedIds.length })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all cursor-pointer shadow-sm shadow-rose-600/20"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold transition-all cursor-pointer shadow-sm shadow-rose-600/20"
                 >
-                  <Trash2 size={12} /> Delete Selected ({selectedIds.length})
+                  <Trash2 size={11} /> Delete ({selectedIds.length})
+                </button>
+                <button
+                  onClick={() => setSelectedIds([])}
+                  className="px-2 py-1 text-[11px] text-gray-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  Deselect
                 </button>
               </div>
             )}
@@ -934,25 +1138,44 @@ function FindingsContent() {
             </div>
           ) : (
             filtered.map((finding) => {
-              const sev = severityConfig[finding.severity];
+              const sev = severityConfig[finding.severity] || severityConfig.INFO;
               const Icon = sev.icon;
               const st = statusConfig[finding.status as FindingStatus] || statusConfig.NEW;
               const isGh = finding.targetType === 'GITHUB' || isGitHubAsset(finding.target, finding.source);
+              const isComb = finding.targetType === 'COMBINED' || finding.target.includes(' + ') || finding.target.includes(' & ');
               const isSelected = selectedFinding?.id === finding.id;
               const isChecked = selectedIds.includes(finding.id);
+              const isNew = newFindingIds.has(finding.id);
 
               return (
                 <motion.div
                   key={finding.id}
                   variants={itemVariants}
                   onClick={() => setSelectedFinding(finding)}
+                  layout
                   className={`rounded-xl border p-4.5 transition-all cursor-pointer group relative ${
                     isSelected
                       ? 'bg-violet-600/[0.08] border-violet-500/40 ring-1 ring-violet-500/30'
                       : 'bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.035] hover:border-white/[0.1]'
                   }`}
                 >
-                  <div className="flex items-start gap-3.5">
+                  {/* New Finding Animation */}
+                  {isNew && (
+                    <motion.div
+                      initial={{ opacity: 1, scale: 1 }}
+                      animate={{ opacity: 0, scale: 1.1 }}
+                      transition={{ duration: 1.5, delay: 0.3 }}
+                      className="absolute inset-0 rounded-xl border-2 border-emerald-400"
+                    />
+                  )}
+
+                  {/* Fade-in for new items */}
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.6 }}
+                  >
+                    <div className="flex items-start gap-3.5">
                     {/* Multi-Select Checkbox */}
                     <button
                       onClick={(e) => handleToggleSelect(finding.id, e)}
@@ -977,20 +1200,22 @@ function FindingsContent() {
                             {finding.title}
                           </p>
 
-                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
                             <span
-                              className={`text-[11px] px-2 py-0.5 rounded-md font-medium inline-flex items-center gap-1 border ${
-                                isGh
-                                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
-                                  : 'bg-sky-500/10 text-sky-300 border-sky-500/20'
+                              className={`text-[11px] px-2.5 py-0.5 rounded-md font-medium inline-flex items-center gap-1.5 border ${
+                                isComb
+                                  ? 'bg-purple-500/10 text-purple-300 border-purple-500/25'
+                                  : isGh
+                                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+                                  : 'bg-sky-500/10 text-sky-300 border-sky-500/25'
                               }`}
                             >
-                              {isGh ? <Github size={10} /> : <Globe size={10} />}
-                              {finding.target.replace(/^https?:\/\//, '')}
+                              {isComb ? <Layers size={10} className="text-purple-400" /> : isGh ? <Github size={10} className="text-emerald-400" /> : <Globe size={10} className="text-sky-400" />}
+                              <span className="truncate max-w-[220px]">{finding.target.replace(/^https?:\/\//, '')}</span>
                             </span>
 
                             {finding.category && (
-                              <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.04] text-gray-300 border border-white/[0.06]">
+                              <span className="text-[11px] px-2.5 py-0.5 rounded-md bg-white/[0.04] text-gray-300 border border-white/[0.06] font-medium">
                                 {finding.category}
                               </span>
                             )}
@@ -1051,7 +1276,8 @@ function FindingsContent() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                    </div>
+                  </motion.div>
                 </motion.div>
               );
             })
@@ -1111,13 +1337,10 @@ function FindingsContent() {
                     </div>
                   </div>
 
-                  {/* Metadata Chips */}
-                  <div className="flex flex-wrap gap-2">
-                    <span className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold ${severityConfig[selectedFinding.severity].bg}`}>
+                  {/* Metadata Chips & Interactive Status Selector */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold ${severityConfig[selectedFinding.severity]?.bg || severityConfig.INFO.bg}`}>
                       {selectedFinding.severity}
-                    </span>
-                    <span className={`text-[10px] px-2.5 py-1 rounded-md border font-semibold ${statusConfig[selectedFinding.status as FindingStatus]?.bg || statusConfig.NEW.bg}`}>
-                      {statusConfig[selectedFinding.status as FindingStatus]?.label || 'New'}
                     </span>
                     {selectedFinding.cvss && (
                       <span className="text-[10px] px-2.5 py-1 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold">
@@ -1129,6 +1352,31 @@ function FindingsContent() {
                         {selectedFinding.cwe}
                       </span>
                     )}
+                  </div>
+
+                  {/* Status Lifecycle Changer */}
+                  <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-2.5 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-gray-400 font-medium">Lifecycle Status:</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${statusConfig[selectedFinding.status as FindingStatus]?.bg || statusConfig.NEW.bg}`}>
+                        Current: {statusConfig[selectedFinding.status as FindingStatus]?.label || 'New'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 pt-1">
+                      {(['NEW', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'FALSE_POSITIVE'] as FindingStatus[]).map(st => (
+                        <button
+                          key={st}
+                          onClick={() => handleUpdateStatus(selectedFinding.id, st)}
+                          className={`text-[10px] px-2 py-1 rounded-lg border font-medium transition-all text-center cursor-pointer ${
+                            selectedFinding.status === st
+                              ? `${statusConfig[st]?.bg} ring-1 ring-white/20 font-bold`
+                              : 'text-gray-400 border-white/[0.04] bg-white/[0.01] hover:bg-white/[0.04] hover:text-white'
+                          }`}
+                        >
+                          {statusConfig[st]?.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Description Box */}

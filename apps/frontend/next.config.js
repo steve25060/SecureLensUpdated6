@@ -30,7 +30,14 @@ const nextConfig = {
 
   // Allowed domains for images
   images: {
-    domains: ['localhost', 'scintillating-strength.railway.internal'],
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'https', hostname: 'localhost' },
+      { protocol: 'http', hostname: '*.railway.internal' },
+      { protocol: 'https', hostname: '*.railway.app' },
+      { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
+      { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
+    ],
     unoptimized: true, // Unoptimize all images for better compatibility
   },
 

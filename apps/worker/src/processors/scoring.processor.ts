@@ -18,17 +18,7 @@ export class ScoringProcessor extends BaseProcessor {
    * Setup Prisma client
    */
   private setupPrisma() {
-    const dbUrl =
-      process.env.DATABASE_URL ||
-      'postgresql://securelens:securelens@localhost:5432/securelens';
-
-    this.prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: dbUrl,
-        },
-      },
-    });
+    this.prisma = new PrismaClient();
   }
 
   /**

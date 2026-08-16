@@ -16,6 +16,7 @@ import {
   Shield,
   ShieldAlert,
 } from "lucide-react";
+import { Github } from "@/components/common/GithubIcon";
 import {
   Area,
   AreaChart,
@@ -32,7 +33,7 @@ const navItems = [
   { title: "Dashboard", icon: LayoutDashboard, active: true },
   { title: "Workspaces", icon: Code2 },
   { title: "Live Scan", icon: Activity },
-  { title: "GitHub Scan", icon: GitBranch },
+  { title: "GitHub Scan", icon: Github },
   { title: "Findings", icon: ShieldAlert },
   { title: "Reports", icon: FileText },
   { title: "AI Copilot", icon: Bot },

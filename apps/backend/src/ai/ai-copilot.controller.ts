@@ -11,7 +11,7 @@ import { AICopilotService, AIProvider, ChatMessage } from './ai-copilot.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { UnifiedFinding } from '@securelens/findings-schema';
 
-@Controller('ai-copilot')
+@Controller(['ai-copilot', 'ai'])
 @UseGuards(OptionalJwtAuthGuard)
 export class AICopilotController {
   constructor(
@@ -27,7 +27,9 @@ export class AICopilotController {
   async chat(
     @Body()
     body: {
-      messages: ChatMessage[];
+      messages?: ChatMessage[];
+      message?: string;
+      attachment?: any;
       findingId?: string;
       findingContext?: any;
       scanContext?: any;
@@ -46,8 +48,13 @@ export class AICopilotController {
         });
       }
 
+      let messages: ChatMessage[] = body.messages || [];
+      if (messages.length === 0 && body.message) {
+        messages = [{ role: 'user', content: body.message, attachment: body.attachment }];
+      }
+
       const result = await this.aiCopilot.chat({
-        messages: body.messages || [],
+        messages,
         findingContext,
         scanContext: body.scanContext,
         target: body.target,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { EventBus, EventType } from './event-bus';
 
 export interface StoredFinding {
   id: string;
@@ -21,11 +22,15 @@ export interface StoredFinding {
   description?: string;
   createdAt: string;
   scanId?: string;
+  userKey?: string;
+  targetType?: 'WEBSITE' | 'GITHUB' | 'COMBINED';
 }
 
 export interface StoredScan {
   id: string;
   target: string;
+  targetUrl?: string | null;
+  repoUrl?: string | null;
   type: 'WEBSITE' | 'GITHUB' | 'COMBINED';
   status: 'COMPLETED' | 'RUNNING' | 'FAILED' | 'CANCELLED';
   score: number;
@@ -34,6 +39,7 @@ export interface StoredScan {
   createdAt: string;
   engines: string[];
   findings: StoredFinding[];
+  userKey?: string;
 }
 
 export interface ActiveScanSession {
@@ -48,17 +54,140 @@ export interface ActiveScanSession {
   startedAt: string;
   findingsCount?: number;
   score?: number;
+  userKey?: string;
 }
 
-const STORAGE_KEY_SCANS = 'securelens_live_scans';
-const STORAGE_KEY_FINDINGS = 'securelens_live_findings';
+const STORAGE_KEY_SCANS_GLOBAL = 'securelens_live_scans';
+const STORAGE_KEY_FINDINGS_GLOBAL = 'securelens_live_findings';
 export const STORAGE_KEY_ACTIVE_SCAN = 'securelens_active_scan_session';
 const EVENT_NAME = 'securelens:scan-completed';
 export const EVENT_ACTIVE_SCAN_UPDATED = 'securelens:active-scan-updated';
 
+/**
+ * Calculates a standard non-linear Security Posture Score (0 - 100) based on vulnerability findings.
+ * Uses an enterprise asymptotic risk curve so scores decay smoothly and accurately across finding volumes.
+ */
+export function calculateSecurityScore(findings: Array<{ severity?: string }>): number {
+  if (!findings || findings.length === 0) return 98;
+  let weightedRisk = 0;
+  findings.forEach(f => {
+    const sev = (f.severity || '').toUpperCase();
+    if (sev === 'CRITICAL') weightedRisk += 20;
+    else if (sev === 'HIGH') weightedRisk += 10;
+    else if (sev === 'MEDIUM') weightedRisk += 4;
+    else if (sev === 'LOW') weightedRisk += 1.5;
+    else if (sev === 'INFO') weightedRisk += 0.2;
+    else weightedRisk += 3;
+  });
+
+  const score = Math.round(100 / (1 + (weightedRisk / 32)));
+  return Math.max(5, Math.min(99, score));
+}
+
+/**
+ * Gets the current active user key to ensure user-scoped data isolation & persistence
+ */
+export function getCurrentUserKey(): string {
+  if (typeof window === 'undefined') return 'default';
+  try {
+    const email = localStorage.getItem('user_email');
+    if (email) return email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      if (u.email) return u.email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+      if (u.userId) return String(u.userId).replace(/[^a-z0-9]/g, '_');
+      if (u.id) return String(u.id).replace(/[^a-z0-9]/g, '_');
+    }
+  } catch {
+    // fallback
+  }
+  return 'default';
+}
+
+function getUserScansKey(userKey?: string): string {
+  const k = userKey || getCurrentUserKey();
+  return `securelens_scans_${k}`;
+}
+
+function getUserFindingsKey(userKey?: string): string {
+  const k = userKey || getCurrentUserKey();
+  return `securelens_findings_${k}`;
+}
+
+function getUserActiveScanKey(userKey?: string): string {
+  const k = userKey || getCurrentUserKey();
+  return `securelens_active_scan_${k}`;
+}
+
+/**
+ * Hydrate and switch active localStorage data when a user logs in or switches accounts
+ */
+export function hydrateUserScanStorage(userIdentifier?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const userKey = userIdentifier
+      ? userIdentifier.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')
+      : getCurrentUserKey();
+
+    const userScansRaw = localStorage.getItem(getUserScansKey(userKey));
+    const userFindingsRaw = localStorage.getItem(getUserFindingsKey(userKey));
+    const userActiveScanRaw = localStorage.getItem(getUserActiveScanKey(userKey));
+
+    let scansCount = 0;
+    let findingsCount = 0;
+
+    if (userScansRaw) {
+      localStorage.setItem(STORAGE_KEY_SCANS_GLOBAL, userScansRaw);
+      try {
+        const parsed = JSON.parse(userScansRaw);
+        scansCount = Array.isArray(parsed) ? parsed.length : 0;
+      } catch {}
+    } else {
+      localStorage.removeItem(STORAGE_KEY_SCANS_GLOBAL);
+    }
+
+    if (userFindingsRaw) {
+      localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, userFindingsRaw);
+      try {
+        const parsed = JSON.parse(userFindingsRaw);
+        findingsCount = Array.isArray(parsed) ? parsed.length : 0;
+      } catch {}
+    } else {
+      localStorage.removeItem(STORAGE_KEY_FINDINGS_GLOBAL);
+    }
+
+    if (userActiveScanRaw) {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_SCAN, userActiveScanRaw);
+    } else {
+      localStorage.removeItem(STORAGE_KEY_ACTIVE_SCAN);
+    }
+
+    // Broadcast user hydration event
+    EventBus.publish('USER_STORAGE_HYDRATED', {
+      userKey,
+      scansCount,
+      findingsCount,
+      hasActiveScan: !!userActiveScanRaw,
+      timestamp: new Date().toISOString(),
+    }, 'live-scan-store');
+
+    // Broadcast update across the app
+    window.dispatchEvent(new CustomEvent(EVENT_NAME));
+    window.dispatchEvent(new CustomEvent(EVENT_ACTIVE_SCAN_UPDATED));
+    window.dispatchEvent(new CustomEvent('userProfileUpdated'));
+  } catch (e) {
+    console.warn('Failed to hydrate user scan storage:', e);
+  }
+}
+
 export function getActiveScanSession(): ActiveScanSession | null {
   if (typeof window === 'undefined') return null;
   try {
+    const userKey = getCurrentUserKey();
+    const userRaw = localStorage.getItem(getUserActiveScanKey(userKey));
+    if (userRaw) return JSON.parse(userRaw);
+
     const raw = localStorage.getItem(STORAGE_KEY_ACTIVE_SCAN);
     return raw ? JSON.parse(raw) : null;
   } catch {
@@ -69,12 +198,22 @@ export function getActiveScanSession(): ActiveScanSession | null {
 export function setActiveScanSession(session: ActiveScanSession | null) {
   if (typeof window === 'undefined') return;
   try {
-    if (!session) {
+    const userKey = getCurrentUserKey();
+    const sessionWithUser = session ? { ...session, userKey } : null;
+
+    if (!sessionWithUser) {
       localStorage.removeItem(STORAGE_KEY_ACTIVE_SCAN);
+      localStorage.removeItem(getUserActiveScanKey(userKey));
+      // Broadcast ACTIVE_SCAN_CLEARED event
+      EventBus.publish('ACTIVE_SCAN_CLEARED', { timestamp: new Date().toISOString() }, 'live-scan-store');
     } else {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_SCAN, JSON.stringify(session));
+      const serialized = JSON.stringify(sessionWithUser);
+      localStorage.setItem(STORAGE_KEY_ACTIVE_SCAN, serialized);
+      localStorage.setItem(getUserActiveScanKey(userKey), serialized);
+      // Broadcast ACTIVE_SCAN_UPDATED event
+      EventBus.publish('ACTIVE_SCAN_UPDATED', sessionWithUser, 'live-scan-store');
     }
-    window.dispatchEvent(new CustomEvent(EVENT_ACTIVE_SCAN_UPDATED, { detail: session }));
+    window.dispatchEvent(new CustomEvent(EVENT_ACTIVE_SCAN_UPDATED, { detail: sessionWithUser }));
   } catch (e) {
     console.warn('Failed to set active scan session:', e);
   }
@@ -83,7 +222,14 @@ export function setActiveScanSession(session: ActiveScanSession | null) {
 export function getStoredLiveScans(): StoredScan[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_SCANS);
+    const userKey = getCurrentUserKey();
+    const userRaw = localStorage.getItem(getUserScansKey(userKey));
+    if (userRaw) {
+      const parsed = JSON.parse(userRaw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+
+    const raw = localStorage.getItem(STORAGE_KEY_SCANS_GLOBAL);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -93,7 +239,14 @@ export function getStoredLiveScans(): StoredScan[] {
 export function getStoredLiveFindings(): StoredFinding[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_FINDINGS);
+    const userKey = getCurrentUserKey();
+    const userRaw = localStorage.getItem(getUserFindingsKey(userKey));
+    if (userRaw) {
+      const parsed = JSON.parse(userRaw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+
+    const raw = localStorage.getItem(STORAGE_KEY_FINDINGS_GLOBAL);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -103,6 +256,8 @@ export function getStoredLiveFindings(): StoredFinding[] {
 export function saveLiveScanRun(params: {
   id: string;
   target: string;
+  targetUrl?: string | null;
+  repoUrl?: string | null;
   type: 'WEBSITE' | 'GITHUB' | 'COMBINED' | string;
   engines: string[];
   findings: Array<{
@@ -114,19 +269,56 @@ export function saveLiveScanRun(params: {
     category?: string;
     cvss?: number;
     description?: string;
+    cwe?: string;
+    owasp?: string;
+    remediation?: string;
+    evidence?: string;
   }>;
   score?: number;
+  workspaceId?: string;
 }): StoredScan {
   const now = new Date();
   const scanId = params.id || `scan-live-${now.getTime()}`;
-  const targetName = params.target || 'Live Target';
+  let targetName = params.target || 'Live Target';
   const scanType = (params.type?.toUpperCase() || 'WEBSITE') as 'WEBSITE' | 'GITHUB' | 'COMBINED';
+  const userKey = getCurrentUserKey();
+
+  let targetUrl = params.targetUrl;
+  let repoUrl = params.repoUrl;
+
+  // For combined scans, extract both website and repo if present in target string
+  if (scanType === 'COMBINED') {
+    if (targetName.includes(' + ')) {
+      const parts = targetName.split(' + ');
+      targetUrl = targetUrl || parts[0].trim();
+      repoUrl = repoUrl || parts[1].trim();
+    } else if (targetName.includes(' & ')) {
+      const parts = targetName.split(' & ');
+      targetUrl = targetUrl || parts[0].trim();
+      repoUrl = repoUrl || parts[1].trim();
+    } else {
+      targetUrl = targetUrl || targetName;
+      repoUrl = repoUrl || 'https://github.com/uptoskills/core';
+      targetName = `${targetUrl} + ${repoUrl}`;
+    }
+  }
+
+  // Broadcast SCAN_STARTED event
+  EventBus.publish('SCAN_STARTED', {
+    id: scanId,
+    target: targetName,
+    targetUrl,
+    repoUrl,
+    type: scanType,
+    engines: params.engines || [],
+    timestamp: now.toISOString(),
+  }, 'live-scan-store');
 
   // Map findings
   const mappedFindings: StoredFinding[] = params.findings.map((f, idx) => {
     const sev = (f.severity?.toUpperCase() || 'MEDIUM') as StoredFinding['severity'];
     const cvssDefault = sev === 'CRITICAL' ? 9.2 : sev === 'HIGH' ? 7.5 : sev === 'MEDIUM' ? 5.3 : sev === 'LOW' ? 3.2 : 1.5;
-    return {
+    const finding: StoredFinding = {
       id: f.id || `f-live-${scanId}-${idx + 1}`,
       title: f.title,
       severity: ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'].includes(sev) ? (sev as any) : 'MEDIUM',
@@ -135,28 +327,41 @@ export function saveLiveScanRun(params: {
       status: 'NEW',
       category: f.category || 'Vulnerability',
       cvss: f.cvss ?? cvssDefault,
+      cwe: f.cwe,
+      owasp: f.owasp,
+      remediation: f.remediation,
+      evidence: f.evidence,
       description: f.description || `Detected during live scan of ${targetName}.`,
       createdAt: now.toISOString().split('T')[0],
       scanId,
+      userKey,
+      targetType: (f as any).targetType || scanType,
     };
+
+    // Broadcast FINDING_ADDED event for each finding
+    EventBus.publish('FINDING_ADDED', finding, 'live-scan-store');
+
+    return finding;
   });
 
-  // Calculate score if not provided (100 - weighted severity deduction)
+  // Calculate score dynamically based on findings
   let calculatedScore = params.score;
-  if (calculatedScore === undefined || calculatedScore === null || calculatedScore === 0) {
-    let deduction = 0;
-    mappedFindings.forEach(f => {
-      if (f.severity === 'CRITICAL') deduction += 20;
-      else if (f.severity === 'HIGH') deduction += 12;
-      else if (f.severity === 'MEDIUM') deduction += 6;
-      else if (f.severity === 'LOW') deduction += 2;
-    });
-    calculatedScore = mappedFindings.length === 0 ? 98 : Math.max(15, 100 - deduction);
+  const hasCriticalOrHigh = mappedFindings.some(f => f.severity === 'CRITICAL' || f.severity === 'HIGH' || f.severity === 'MEDIUM');
+  
+  if (
+    calculatedScore === undefined || 
+    calculatedScore === null || 
+    calculatedScore === 0 || 
+    (hasCriticalOrHigh && calculatedScore >= 98)
+  ) {
+    calculatedScore = calculateSecurityScore(mappedFindings);
   }
 
   const newScan: StoredScan = {
     id: scanId,
     target: targetName,
+    targetUrl,
+    repoUrl,
     type: scanType,
     status: 'COMPLETED',
     score: calculatedScore,
@@ -165,29 +370,488 @@ export function saveLiveScanRun(params: {
     createdAt: now.toISOString(),
     engines: params.engines || [],
     findings: mappedFindings,
+    userKey,
   };
 
   if (typeof window !== 'undefined') {
     try {
+      // 1. Update Global Active Key
       const existingScans = getStoredLiveScans();
       const updatedScans = [newScan, ...existingScans.filter(s => s.id !== scanId)].slice(0, 50);
-      localStorage.setItem(STORAGE_KEY_SCANS, JSON.stringify(updatedScans));
+      localStorage.setItem(STORAGE_KEY_SCANS_GLOBAL, JSON.stringify(updatedScans));
 
       const existingFindings = getStoredLiveFindings();
-      const updatedFindings = [...mappedFindings, ...existingFindings.filter(f => f.scanId !== scanId)].slice(0, 200);
-      localStorage.setItem(STORAGE_KEY_FINDINGS, JSON.stringify(updatedFindings));
+      const updatedFindings = [...mappedFindings, ...existingFindings.filter(f => f.scanId !== scanId)].slice(0, 250);
+      localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(updatedFindings));
 
-      // Broadcast event
+      // 2. Update User-Scoped Key for Multi-User Isolation
+      localStorage.setItem(getUserScansKey(userKey), JSON.stringify(updatedScans));
+      localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(updatedFindings));
+
+      // Broadcast SCAN_ADDED event (new scan added to storage)
+      EventBus.publish('SCAN_ADDED', newScan, 'live-scan-store');
+
+      // 3. Persist to Backend Server / Database in Background
+      const token = localStorage.getItem('access_token') || localStorage.getItem('sl_token');
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+
+      fetch(`${backendUrl}/api/scans/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          id: scanId,
+          target: targetName,
+          type: scanType,
+          mode: scanType.toLowerCase(),
+          engines: params.engines || [],
+          riskScore: calculatedScore,
+          findingsCount: mappedFindings.length,
+          workspaceId: params.workspaceId || 'default-workspace',
+          findings: mappedFindings,
+        }),
+      }).then(response => {
+        if (response.ok) {
+          // Broadcast successful backend sync
+          EventBus.publish('SCAN_SYNCED', { scanId, target: targetName }, 'live-scan-store');
+        } else {
+          // Broadcast sync failure (non-critical)
+          EventBus.publish('SCAN_SYNC_FAILED', { scanId, target: targetName }, 'live-scan-store');
+        }
+      }).catch(() => {
+        // Fallback: silent catch, local storage holds the state safely
+        EventBus.publish('SCAN_SYNC_FAILED', { scanId, target: targetName }, 'live-scan-store');
+      });
+
+      // Broadcast events
+      EventBus.publish('SCAN_COMPLETED', newScan, 'live-scan-store');
       window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: newScan }));
+      window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_SCANS_GLOBAL }));
     } catch (e) {
-      console.warn('Failed to save live scan run:', e);
+      console.warn('Failed to save scan run locally:', e);
+      // Broadcast SCAN_FAILED event on error
+      EventBus.publish('SCAN_FAILED', {
+        scanId,
+        target: targetName,
+        error: e instanceof Error ? e.message : 'Unknown error',
+        timestamp: now.toISOString(),
+      }, 'live-scan-store');
     }
   }
 
   return newScan;
 }
 
-export function useLiveScanSync(pollIntervalMs: number = 2000) {
+export function clearStoredLiveScans(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const userKey = getCurrentUserKey();
+    const existingScans = getStoredLiveScans();
+    const existingFindings = getStoredLiveFindings();
+    const deletedScansCount = existingScans.length;
+    const deletedFindingsCount = existingFindings.length;
+
+    localStorage.removeItem(STORAGE_KEY_SCANS_GLOBAL);
+    localStorage.removeItem(STORAGE_KEY_FINDINGS_GLOBAL);
+    localStorage.removeItem(getUserScansKey(userKey));
+    localStorage.removeItem(getUserFindingsKey(userKey));
+
+    // Broadcast multiple events for comprehensive tracking
+    EventBus.publish('SCANS_CLEARED', { count: deletedScansCount }, 'live-scan-store');
+    EventBus.publish('FINDINGS_CLEARED', { count: deletedFindingsCount }, 'live-scan-store');
+    EventBus.publish('DATA_REFRESHED', { 
+      action: 'clear', 
+      scansCleared: deletedScansCount,
+      findingsCleared: deletedFindingsCount,
+      timestamp: new Date().toISOString() 
+    }, 'live-scan-store');
+    
+    window.dispatchEvent(new CustomEvent(EVENT_NAME));
+  } catch (e) {
+    console.warn('Failed to clear live scan store:', e);
+  }
+}
+
+/**
+ * Add a finding to stored findings and broadcast event
+ */
+export function addStoredFinding(finding: StoredFinding): StoredFinding {
+  if (typeof window === 'undefined') return finding;
+  
+  try {
+    const userKey = getCurrentUserKey();
+    const existingFindings = getStoredLiveFindings();
+    
+    // Avoid duplicates
+    if (existingFindings.some(f => f.id === finding.id)) {
+      return finding;
+    }
+
+    const findingWithUser = { ...finding, userKey };
+    const updatedFindings = [findingWithUser, ...existingFindings].slice(0, 250);
+
+    localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(updatedFindings));
+    localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(updatedFindings));
+
+    // Broadcast FINDING_ADDED event
+    EventBus.publish('FINDING_ADDED', findingWithUser, 'live-scan-store');
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_FINDINGS_GLOBAL }));
+
+    return findingWithUser;
+  } catch (e) {
+    console.warn('Failed to add finding:', e);
+    return finding;
+  }
+}
+
+/**
+ * Delete a finding by ID and broadcast event
+ */
+export function deleteStoredFinding(findingId: string): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingFindings = getStoredLiveFindings();
+    const filtered = existingFindings.filter(f => f.id !== findingId);
+
+    if (filtered.length === existingFindings.length) {
+      return false; // Finding not found
+    }
+
+    localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(filtered));
+    localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(filtered));
+
+    // Broadcast FINDING_DELETED event
+    EventBus.publish('FINDING_DELETED', { id: findingId }, 'live-scan-store');
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_FINDINGS_GLOBAL }));
+
+    return true;
+  } catch (e) {
+    console.warn('Failed to delete finding:', e);
+    return false;
+  }
+}
+
+/**
+ * Bulk delete findings and broadcast event
+ */
+export function deleteStoredFindings(findingIds: string[]): number {
+  if (typeof window === 'undefined') return 0;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingFindings = getStoredLiveFindings();
+    const idSet = new Set(findingIds);
+    const filtered = existingFindings.filter(f => !idSet.has(f.id));
+    const deletedCount = existingFindings.length - filtered.length;
+
+    if (deletedCount === 0) {
+      return 0; // No findings deleted
+    }
+
+    localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(filtered));
+    localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(filtered));
+
+    // Broadcast FINDINGS_BULK_DELETED event
+    EventBus.publish('FINDINGS_BULK_DELETED', { ids: findingIds, count: deletedCount }, 'live-scan-store');
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_FINDINGS_GLOBAL }));
+
+    return deletedCount;
+  } catch (e) {
+    console.warn('Failed to delete findings:', e);
+    return 0;
+  }
+}
+
+/**
+ * Update scan status and broadcast event
+ */
+export function updateScanStatus(
+  scanId: string,
+  status: StoredScan['status'],
+  additionalData?: Partial<StoredScan>
+): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingScans = getStoredLiveScans();
+    const scan = existingScans.find(s => s.id === scanId);
+
+    if (!scan) {
+      return false;
+    }
+
+    const updatedScan = { ...scan, status, ...additionalData };
+    const updated = existingScans.map(s => s.id === scanId ? updatedScan : s);
+
+    localStorage.setItem(STORAGE_KEY_SCANS_GLOBAL, JSON.stringify(updated));
+    localStorage.setItem(getUserScansKey(userKey), JSON.stringify(updated));
+
+    // Broadcast appropriate events based on status
+    if (status === 'COMPLETED') {
+      EventBus.publish('SCAN_COMPLETED', updatedScan, 'live-scan-store');
+    } else if (status === 'FAILED') {
+      EventBus.publish('SCAN_FAILED', updatedScan, 'live-scan-store');
+    } else if (status === 'CANCELLED') {
+      EventBus.publish('SCAN_CANCELLED', updatedScan, 'live-scan-store');
+    } else if (status === 'RUNNING') {
+      EventBus.publish('SCAN_RUNNING', updatedScan, 'live-scan-store');
+    }
+
+    // Always broadcast SCAN_UPDATED for any status change
+    EventBus.publish('SCAN_UPDATED', updatedScan, 'live-scan-store');
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_SCANS_GLOBAL }));
+
+    return true;
+  } catch (e) {
+    console.warn('Failed to update scan status:', e);
+    return false;
+  }
+}
+
+/**
+ * Delete a scan by ID and broadcast event
+ */
+export function deleteStoredScan(scanId: string): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingScans = getStoredLiveScans();
+    const filtered = existingScans.filter(s => s.id !== scanId);
+
+    if (filtered.length === existingScans.length) {
+      return false; // Scan not found
+    }
+
+    localStorage.setItem(STORAGE_KEY_SCANS_GLOBAL, JSON.stringify(filtered));
+    localStorage.setItem(getUserScansKey(userKey), JSON.stringify(filtered));
+
+    // Also remove associated findings
+    const existingFindings = getStoredLiveFindings();
+    const filteredFindings = existingFindings.filter(f => f.scanId !== scanId);
+    const deletedFindingsCount = existingFindings.length - filteredFindings.length;
+
+    if (deletedFindingsCount > 0) {
+      localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(filteredFindings));
+      localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(filteredFindings));
+    }
+
+    // Broadcast SCAN_DELETED event
+    EventBus.publish('SCAN_DELETED', { 
+      id: scanId, 
+      deletedFindingsCount 
+    }, 'live-scan-store');
+    
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_SCANS_GLOBAL }));
+    window.dispatchEvent(new CustomEvent(EVENT_NAME));
+
+    return true;
+  } catch (e) {
+    console.warn('Failed to delete scan:', e);
+    return false;
+  }
+}
+
+/**
+ * Bulk delete scans and broadcast event
+ */
+export function deleteStoredScans(scanIds: string[]): number {
+  if (typeof window === 'undefined') return 0;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingScans = getStoredLiveScans();
+    const idSet = new Set(scanIds);
+    const filtered = existingScans.filter(s => !idSet.has(s.id));
+    const deletedCount = existingScans.length - filtered.length;
+
+    if (deletedCount === 0) {
+      return 0; // No scans deleted
+    }
+
+    localStorage.setItem(STORAGE_KEY_SCANS_GLOBAL, JSON.stringify(filtered));
+    localStorage.setItem(getUserScansKey(userKey), JSON.stringify(filtered));
+
+    // Also remove associated findings
+    const existingFindings = getStoredLiveFindings();
+    const filteredFindings = existingFindings.filter(f => !f.scanId || !idSet.has(f.scanId));
+    const deletedFindingsCount = existingFindings.length - filteredFindings.length;
+
+    if (deletedFindingsCount > 0) {
+      localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(filteredFindings));
+      localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(filteredFindings));
+    }
+
+    // Broadcast SCANS_BULK_DELETED event
+    EventBus.publish('SCANS_BULK_DELETED', { 
+      ids: scanIds, 
+      count: deletedCount,
+      deletedFindingsCount 
+    }, 'live-scan-store');
+    
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_SCANS_GLOBAL }));
+    window.dispatchEvent(new CustomEvent(EVENT_NAME));
+
+    return deletedCount;
+  } catch (e) {
+    console.warn('Failed to delete scans:', e);
+    return 0;
+  }
+}
+
+/**
+ * Update finding status and broadcast event
+ */
+export function updateFindingStatus(findingId: string, status: StoredFinding['status']): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingFindings = getStoredLiveFindings();
+    const finding = existingFindings.find(f => f.id === findingId);
+
+    if (!finding) {
+      return false;
+    }
+
+    const updatedFinding = { ...finding, status };
+    const updated = existingFindings.map(f => f.id === findingId ? updatedFinding : f);
+
+    localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(updated));
+    localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(updated));
+
+    // Broadcast FINDING_UPDATED event
+    EventBus.publish('FINDING_UPDATED', updatedFinding, 'live-scan-store');
+    EventBus.publish('FINDING_STATUS_CHANGED', { 
+      id: findingId, 
+      oldStatus: finding.status, 
+      newStatus: status 
+    }, 'live-scan-store');
+    
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_FINDINGS_GLOBAL }));
+
+    return true;
+  } catch (e) {
+    console.warn('Failed to update finding status:', e);
+    return false;
+  }
+}
+
+/**
+ * Update finding fields and broadcast event
+ */
+export function updateStoredFinding(findingId: string, updates: Partial<StoredFinding>): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingFindings = getStoredLiveFindings();
+    const finding = existingFindings.find(f => f.id === findingId);
+
+    if (!finding) {
+      return false;
+    }
+
+    const updatedFinding = { ...finding, ...updates };
+    const updated = existingFindings.map(f => f.id === findingId ? updatedFinding : f);
+
+    localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(updated));
+    localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(updated));
+
+    // Broadcast FINDING_UPDATED event
+    EventBus.publish('FINDING_UPDATED', updatedFinding, 'live-scan-store');
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_FINDINGS_GLOBAL }));
+
+    return true;
+  } catch (e) {
+    console.warn('Failed to update finding:', e);
+    return false;
+  }
+}
+
+/**
+ * Bulk update finding statuses and broadcast event
+ */
+export function bulkUpdateFindingStatus(findingIds: string[], status: StoredFinding['status']): number {
+  if (typeof window === 'undefined') return 0;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingFindings = getStoredLiveFindings();
+    const idSet = new Set(findingIds);
+    
+    let updateCount = 0;
+    const updated = existingFindings.map(f => {
+      if (idSet.has(f.id)) {
+        updateCount++;
+        return { ...f, status };
+      }
+      return f;
+    });
+
+    if (updateCount === 0) {
+      return 0; // No findings updated
+    }
+
+    localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify(updated));
+    localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify(updated));
+
+    // Broadcast FINDINGS_BULK_UPDATED event
+    EventBus.publish('FINDINGS_BULK_UPDATED', { 
+      ids: findingIds, 
+      count: updateCount,
+      status 
+    }, 'live-scan-store');
+    
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_FINDINGS_GLOBAL }));
+
+    return updateCount;
+  } catch (e) {
+    console.warn('Failed to bulk update findings:', e);
+    return 0;
+  }
+}
+
+/**
+ * Delete all findings (clear findings) and broadcast event
+ */
+export function deleteAllFindings(): number {
+  if (typeof window === 'undefined') return 0;
+
+  try {
+    const userKey = getCurrentUserKey();
+    const existingFindings = getStoredLiveFindings();
+    const deletedCount = existingFindings.length;
+
+    if (deletedCount === 0) {
+      return 0;
+    }
+
+    localStorage.setItem(STORAGE_KEY_FINDINGS_GLOBAL, JSON.stringify([]));
+    localStorage.setItem(getUserFindingsKey(userKey), JSON.stringify([]));
+
+    // Broadcast FINDINGS_CLEARED event
+    EventBus.publish('FINDINGS_CLEARED', { count: deletedCount }, 'live-scan-store');
+    EventBus.publish('FINDINGS_BULK_DELETED', { 
+      ids: existingFindings.map(f => f.id), 
+      count: deletedCount 
+    }, 'live-scan-store');
+    
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY_FINDINGS_GLOBAL }));
+
+    return deletedCount;
+  } catch (e) {
+    console.warn('Failed to delete all findings:', e);
+    return 0;
+  }
+}
+
+export function useLiveScanSync(pollIntervalMs = 2000) {
   const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
   const [backendScans, setBackendScans] = useState<StoredScan[]>([]);
   const [backendFindings, setBackendFindings] = useState<StoredFinding[]>([]);
@@ -196,9 +860,9 @@ export function useLiveScanSync(pollIntervalMs: number = 2000) {
     setLastUpdated(Date.now());
   }, []);
 
-  // Poll backend for real database updates in real time
   useEffect(() => {
     let isMounted = true;
+    let pollCount = 0;
 
     const fetchBackendData = async () => {
       if (typeof window === 'undefined') return;
@@ -208,7 +872,7 @@ export function useLiveScanSync(pollIntervalMs: number = 2000) {
       try {
         const [scansRes, findingsRes] = await Promise.all([
           fetch('/api/scans', { headers }).catch(() => null),
-          fetch('/api/findings?limit=150', { headers }).catch(() => null),
+          fetch('/api/findings?limit=250', { headers }).catch(() => null),
         ]);
 
         if (isMounted && scansRes && scansRes.ok) {
@@ -260,27 +924,75 @@ export function useLiveScanSync(pollIntervalMs: number = 2000) {
             setBackendFindings(mappedF);
           }
         }
-      } catch {
+
+        // Broadcast DATA_REFRESHED event after each poll
+        pollCount++;
+        EventBus.publish('DATA_REFRESHED', {
+          pollCount,
+          scansCount: (scansRes && scansRes.ok) ? (backendScans.length) : 0,
+          findingsCount: (findingsRes && findingsRes.ok) ? (backendFindings.length) : 0,
+          timestamp: new Date().toISOString(),
+        }, 'live-scan-sync');
+      } catch (error) {
+        console.debug('Data refresh polling error (non-critical):', error);
         // quiet fallback to local store
       }
     };
 
+    // Perform initial fetch
     fetchBackendData();
-    const interval = setInterval(() => {
+
+    // Set up polling interval (default 2 seconds)
+    const pollInterval = setInterval(() => {
       fetchBackendData();
       handleUpdate();
+      
+      // Also refresh from localStorage and broadcast
+      const scans = getStoredLiveScans();
+      const findings = getStoredLiveFindings();
+      EventBus.publish('DATA_REFRESHED', { 
+        source: 'localStorage',
+        scans, 
+        findings,
+        scansCount: scans.length,
+        findingsCount: findings.length,
+        timestamp: new Date().toISOString() 
+      }, 'live-scan-sync');
     }, pollIntervalMs);
+
+    // Listen to EventBus events for real-time updates
+    const unsubscribeScanAdded = EventBus.subscribe('SCAN_ADDED', () => {
+      handleUpdate();
+    });
+
+    const unsubscribeScanUpdated = EventBus.subscribe('SCAN_UPDATED', () => {
+      handleUpdate();
+    });
+
+    const unsubscribeFindingAdded = EventBus.subscribe('FINDING_ADDED', () => {
+      handleUpdate();
+    });
+
+    const unsubscribeFindingUpdated = EventBus.subscribe('FINDING_UPDATED', () => {
+      handleUpdate();
+    });
 
     window.addEventListener(EVENT_NAME, handleUpdate);
     window.addEventListener('storage', handleUpdate);
+    window.addEventListener('userProfileUpdated', handleUpdate);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      clearInterval(pollInterval);
+      unsubscribeScanAdded();
+      unsubscribeScanUpdated();
+      unsubscribeFindingAdded();
+      unsubscribeFindingUpdated();
       window.removeEventListener(EVENT_NAME, handleUpdate);
       window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener('userProfileUpdated', handleUpdate);
     };
-  }, [handleUpdate, pollIntervalMs]);
+  }, [handleUpdate, pollIntervalMs, backendScans.length, backendFindings.length]);
 
   const localScans = getStoredLiveScans();
   const localFindings = getStoredLiveFindings();

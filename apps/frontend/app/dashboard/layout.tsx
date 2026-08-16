@@ -7,71 +7,30 @@ import Header from '@/components/dashboard/common/Header';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Radio, ArrowRight, X, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { getActiveScanSession, setActiveScanSession, EVENT_ACTIVE_SCAN_UPDATED, type ActiveScanSession } from '@/lib/live-scan-store';
+import { applyThemeConfig, getStoredThemeConfig, THEME_PRESETS } from '@/lib/theme-manager';
+import GlobalNotifications from '@/components/GlobalNotifications';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [accentColor, setAccentColor] = React.useState('#7c3aed');
+  const [accentColor, setAccentColor] = React.useState('#8b5cf6');
   const [activeScan, setActiveScan] = useState<ActiveScanSession | null>(null);
   const [dismissedScanId, setDismissedScanId] = useState<string | null>(null);
 
   React.useEffect(() => {
-    const applyThemeAndAccent = () => {
-      const storedAccent = localStorage.getItem('sl_accent_color');
-
-      let color = '#7c3aed';
-      if (storedAccent) {
-        try {
-          const parsed = JSON.parse(storedAccent);
-          color = parsed.value || parsed;
-        } catch {
-          color = storedAccent;
-        }
+    const syncTheme = () => {
+      const config = getStoredThemeConfig();
+      applyThemeConfig(config);
+      const preset = THEME_PRESETS.find(p => p.id === config.presetId);
+      if (preset) {
+        setAccentColor(preset.primary);
       }
-      setAccentColor(color);
-
-      const ACCENT_MAP: Record<string, { primary: string; light: string; dark: string }> = {
-        '#7c3aed': { primary: '#7c3aed', light: '#a78bfa', dark: '#5b21b6' },
-        '#3b82f6': { primary: '#3b82f6', light: '#60a5fa', dark: '#1d4ed8' },
-        '#10b981': { primary: '#10b981', light: '#34d399', dark: '#047857' },
-        '#f59e0b': { primary: '#f59e0b', light: '#fbbf24', dark: '#b45309' },
-        '#ef4444': { primary: '#ef4444', light: '#f87171', dark: '#b91c1c' },
-        '#06b6d4': { primary: '#06b6d4', light: '#22d3ee', dark: '#0e7490' },
-      };
-
-      const palette = ACCENT_MAP[color] || { primary: color, light: color, dark: color };
-
-      // Apply root CSS variables
-      const root = document.documentElement;
-      root.style.setProperty('--color-primary', palette.primary);
-      root.style.setProperty('--color-primary-light', palette.light);
-      root.style.setProperty('--color-primary-dark', palette.dark);
-      root.style.setProperty('--color-accent', palette.primary);
-      root.style.setProperty('--color-accent-light', palette.light);
-      root.style.setProperty('--color-accent-dark', palette.dark);
-
-      root.style.setProperty('--color-violet-600', palette.primary);
-      root.style.setProperty('--color-violet-500', palette.primary);
-      root.style.setProperty('--color-violet-400', palette.light);
-      root.style.setProperty('--color-violet-300', palette.light);
-      root.style.setProperty('--color-violet-700', palette.dark);
-
-      root.style.setProperty('--background', '#050508');
-      root.style.setProperty('--background-secondary', '#0a0a12');
-      root.style.setProperty('--color-foreground', '#f1f5f9');
-      root.style.colorScheme = 'dark';
-      document.body.classList.add('dark-mode');
-      document.body.classList.remove('light-mode');
     };
 
-    applyThemeAndAccent();
-
-    const handleUpdate = () => applyThemeAndAccent();
-    window.addEventListener('themeOrAccentUpdated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
+    syncTheme();
+    window.addEventListener('themeOrAccentUpdated', syncTheme);
     return () => {
-      window.removeEventListener('themeOrAccentUpdated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener('themeOrAccentUpdated', syncTheme);
     };
   }, []);
 
@@ -133,6 +92,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen bg-slate-950 text-white">
+      {/* ─── Global Real-Time Notifications ─────────────────────────────────── */}
+      <GlobalNotifications />
+      
       <div className="fixed inset-0 pointer-events-none z-0">
         <div
           className="absolute inset-0 transition-all duration-300"

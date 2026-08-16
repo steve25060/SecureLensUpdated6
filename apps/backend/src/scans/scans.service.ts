@@ -72,14 +72,14 @@ export class ScansService {
     if (this.prisma.connected) {
       try {
         const rows = await this.prisma.scan.findMany({
-          where: { userId },
+          where: userId ? { OR: [{ userId }, { userId: 'demo-user-1' }] } : {},
           orderBy: { createdAt: 'desc' },
-          take: 30,
+          take: 50,
         });
         return rows.map(s => {
           let score = s.riskScore;
-          if (score === null || score === undefined || score === 0) {
-            score = Math.max(15, 100 - ((s.findingsCount || 0) * 6));
+          if (score === null || score === undefined || score === 0 || ((s.findingsCount || 0) > 0 && score >= 98)) {
+            score = Math.max(15, Math.min(99, 100 - ((s.findingsCount || 0) * 8)));
           }
           return { ...s, riskScore: score };
         });
@@ -87,10 +87,10 @@ export class ScansService {
         this.logger.warn(`DB scan findAll failed (${err.message}) → file fallback`);
       }
     }
-    return this.fileStore().filter(s => s.userId === userId).map(s => {
+    return this.fileStore().filter(s => !userId || s.userId === userId || s.userId === 'demo-user-1').map(s => {
       let score = s.riskScore;
-      if (score === null || score === undefined || score === 0) {
-        score = Math.max(15, 100 - ((s.findingsCount || 0) * 6));
+      if (score === null || score === undefined || score === 0 || ((s.findingsCount || 0) > 0 && score >= 98)) {
+        score = Math.max(15, Math.min(99, 100 - ((s.findingsCount || 0) * 8)));
       }
       return { ...s, riskScore: score };
     });
@@ -102,8 +102,8 @@ export class ScansService {
         const scan = await this.prisma.scan.findUnique({ where: { id } });
         if (scan) {
           let score = scan.riskScore;
-          if (score === null || score === undefined || score === 0) {
-            score = Math.max(15, 100 - ((scan.findingsCount || 0) * 6));
+          if (score === null || score === undefined || score === 0 || ((scan.findingsCount || 0) > 0 && scan.riskScore >= 98)) {
+            score = Math.max(15, Math.min(99, 100 - ((scan.findingsCount || 0) * 8)));
           }
           return { ...scan, riskScore: score };
         }
@@ -114,8 +114,8 @@ export class ScansService {
     const rec = this.fileStore().find(s => s.id === id);
     if (!rec) throw new NotFoundException(`Scan not found: ${id}`);
     let score = rec.riskScore;
-    if (score === null || score === undefined || score === 0) {
-      score = Math.max(15, 100 - ((rec.findingsCount || 0) * 6));
+    if (score === null || score === undefined || score === 0 || ((rec.findingsCount || 0) > 0 && score >= 98)) {
+      score = Math.max(15, Math.min(99, 100 - ((rec.findingsCount || 0) * 8)));
     }
     return { ...rec, riskScore: score };
   }
@@ -124,49 +124,50 @@ export class ScansService {
     const scan = await this.findOne(scanId) as any;
     return {
       scanId: scan.id,
-      status: scan.status,
-      progress: scan.progress ?? 0,
+      status: scan.status?.toLowerCase() ?? 'completed',
+      progress: scan.progress ?? 100,
       startedAt: scan.startedAt,
-      completedAt: scan.completedAt,
-      engines: scan.engines ?? [],
+      completedAt: scan.completedAt ?? scan.updatedAt,
+      findingsCount: scan.findingsCount ?? 0,
       riskScore: scan.riskScore ?? 85,
     };
   }
 
   async getScanResults(scanId: string) {
     const scan = await this.findOne(scanId) as any;
-    let findings: any[] = [];
     let riskScore = scan.riskScore;
     
+    // Check if we have real findings in DB or template pool
+    let findings: any[] = [];
     if (this.prisma.connected) {
       try {
-        findings = await this.prisma.finding.findMany({ where: { scanId }, orderBy: { createdAt: 'desc' } });
-      } catch { /* ignore */ }
+        findings = await this.prisma.finding.findMany({
+          where: { scanId },
+          orderBy: { severity: 'asc' },
+        });
+      } catch (e: any) {
+        this.logger.warn(`Failed to fetch DB findings for scan ${scanId}: ${e.message}`);
+      }
     }
-    
-    // If findings are empty but scan has findingsCount, generate findings from templates
-    // This handles the file-store fallback case
-    if (findings.length === 0 && scan.findingsCount && scan.findingsCount > 0) {
-      const engines = scan.engines ?? [];
-      const target = scan.target;
-      
-      // Generate template findings for display
-      const ENGINE_KEY_MAP: Record<string, string> = {
-        http_security: 'website_info',
-        api_security: 'website_info',
-        email_security: 'website_info',
-      };
-      
+
+    // Fallback: If DB findings are empty but scan has findingsCount, pick from templates
+    if (findings.length === 0 && scan.findingsCount > 0) {
+      const engines = scan.engines ?? ['nuclei', 'owasp_zap'];
       for (const eng of engines) {
-        const key = ENGINE_KEY_MAP[eng] || eng;
-        const picked = pickFindingsForEngine(key, target);
-        for (const item of picked.slice(0, 2)) {
+        const templates = pickFindingsForEngine(eng, scan.target || 'target');
+        for (const t of templates) {
           findings.push({
-            id: `template-${scanId}-${item.title.replace(/\s+/g, '-')}`,
-            title: item.title,
-            description: item.description,
-            severity: item.severity,
-            category: item.category || 'General',
+            id: `f-${randomUUID()}`,
+            title: t.title,
+            severity: t.severity,
+            category: t.category,
+            cwe: t.cwe,
+            cvss: t.cvss,
+            owasp: t.owasp,
+            description: t.description,
+            remediation: t.remediation,
+            target: scan.target,
+            status: 'NEW',
             source: eng,
             scanId,
           });
@@ -175,18 +176,23 @@ export class ScansService {
       }
     }
 
-    if ((riskScore === null || riskScore === undefined || riskScore === 0) && (findings.length > 0 || scan.findingsCount > 0)) {
+    if (findings.length > 0 || (scan.findingsCount || 0) > 0) {
       let deduction = 0;
       findings.forEach(f => {
         const sev = String(f.severity).toUpperCase();
-        if (sev === 'CRITICAL') deduction += 20;
-        else if (sev === 'HIGH') deduction += 12;
-        else if (sev === 'MEDIUM') deduction += 5;
-        else if (sev === 'LOW') deduction += 2;
+        if (sev === 'CRITICAL') deduction += 25;
+        else if (sev === 'HIGH') deduction += 14;
+        else if (sev === 'MEDIUM') deduction += 7;
+        else if (sev === 'LOW') deduction += 3;
+        else if (sev === 'INFO') deduction += 0.5;
       });
-      riskScore = Math.max(15, Math.min(100, 100 - (deduction || ((scan.findingsCount || findings.length) * 5))));
+      if (deduction > 0) {
+        riskScore = Math.max(12, Math.min(99, Math.round(100 - deduction)));
+      } else {
+        riskScore = 98;
+      }
     } else if (riskScore === null || riskScore === undefined || riskScore === 0) {
-      riskScore = 85;
+      riskScore = 98;
     }
     
     return {
@@ -198,7 +204,8 @@ export class ScansService {
       findings: findings.slice(0, scan.findingsCount || findings.length),
       riskScore: riskScore,
       startedAt: scan.startedAt,
-      completedAt: scan.completedAt,
+      completedAt: scan.completedAt ?? scan.updatedAt,
+      createdAt: scan.createdAt,
     };
   }
 
@@ -260,7 +267,23 @@ export class ScansService {
 
   // ─── create + start ──────────────────────────────────────────────────────────
 
-  async create(userId: string, data: { workspaceId: string; mode?: string; target: string; engines: string[]; profile?: 'fast' | 'normal' | 'aggressive' }) {
+  async create(userId: string, data: { id?: string; workspaceId: string; mode?: string; target: string; engines: string[]; profile?: 'fast' | 'normal' | 'aggressive'; riskScore?: number; findingsCount?: number; status?: string }) {
+    if (data.id) {
+      try {
+        const existing = await this.findOne(data.id);
+        if (existing) {
+          if (data.riskScore !== undefined || data.findingsCount !== undefined || data.status) {
+            await this.setStatus(data.id, (data.status as any) || 'COMPLETED', {
+              riskScore: data.riskScore ?? existing.riskScore,
+              findingsCount: data.findingsCount ?? existing.findingsCount,
+              completedAt: new Date().toISOString(),
+            });
+          }
+          return existing;
+        }
+      } catch {}
+    }
+
     const mode = (data.mode ?? 'website').toLowerCase();
     const validForMode = validEngineIdsForMode(mode);
     const engines = (data.engines ?? []).filter(e => isValidEngineId(e));
@@ -312,16 +335,16 @@ export class ScansService {
       target: data.target,
       engines,
       profile,
-      riskScore: null as number | null,
-      findingsCount: 0,
-      progress: 0,
-      status: 'QUEUED' as ScanRecord['status'],
+      riskScore: data.riskScore ?? null,
+      findingsCount: data.findingsCount ?? 0,
+      progress: data.status === 'COMPLETED' ? 100 : 0,
+      status: (data.status as any) || ('QUEUED' as ScanRecord['status']),
     };
 
     if (this.prisma.connected) {
       try {
         const created = await this.prisma.scan.create({
-          data: { ...base, status: 'QUEUED' } as any,
+          data: { ...base, id: data.id || undefined } as any,
         });
         this.logger.log(`Scan created (DB): ${created.id}`);
         return created;
@@ -333,16 +356,18 @@ export class ScansService {
     const nowIso = new Date().toISOString();
     const record: ScanRecord = {
       ...base,
-      id: randomUUID(),
+      id: data.id || randomUUID(),
       errorMessage: null,
       startedAt: null,
-      completedAt: null,
+      completedAt: data.status === 'COMPLETED' ? nowIso : null,
       createdAt: nowIso,
       updatedAt: nowIso,
     };
     const store = this.fileStore();
-    store.unshift(record);
-    this.writeFile(store);
+    // Replace if id already exists in file store
+    const filteredStore = store.filter(s => s.id !== record.id);
+    filteredStore.unshift(record);
+    this.writeFile(filteredStore);
     this.logger.log(`Scan created (file): ${record.id}`);
     return record;
   }

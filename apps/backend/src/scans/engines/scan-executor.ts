@@ -7,6 +7,8 @@ import { pickFindingsForEngine } from './finding-templates';
 import ScanOrchestrator from './scan-orchestrator';
 import NormalizationLayer from './normalization-layer';
 import CorrelationEngine from './correlation-engine';
+import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { exec as execCb } from 'node:child_process';
 import { promisify } from 'node:util';
 const exec = promisify(execCb);
@@ -108,38 +110,45 @@ export class ScanExecutor {
       // generate findings from engine templates so findings are never empty
       if (correlatedFindings.length === 0) {
         const ENGINE_KEY_MAP: Record<string, string> = {
-          dnsx: 'website_finder',
-          dns_check: 'website_finder',
-          subfinder: 'website_finder',
-          subdomain_discovery: 'website_finder',
-          httpx: 'website_finder',
-          asset_discovery: 'website_finder',
-          whatweb: 'website_info',
-          tech_detection: 'website_info',
-          http_security: 'website_info',
-          testssl: 'ssl_checker',
-          ssl_tls_analysis: 'ssl_checker',
-          katana: 'website_finder',
-          endpoint_discovery: 'website_finder',
-          nmap: 'port_scanner',
-          network_exposure: 'port_scanner',
-          nuclei: 'vulnerability_scanner',
-          vulnerability_detection: 'vulnerability_scanner',
-          security_intelligence: 'vulnerability_scanner',
-          secret_finder: 'secret_finder',
-          secret_detection: 'secret_finder',
-          code_scanner: 'code_scanner',
-          code_security: 'code_scanner',
-          container_checker: 'container_checker',
-          dependency_analysis: 'container_checker',
-          infrastructure_security: 'container_checker',
-          repository_overview: 'code_scanner',
+          dnsx: 'dns_check',
+          dns_check: 'dns_check',
+          subfinder: 'subdomain_discovery',
+          subdomain_discovery: 'subdomain_discovery',
+          httpx: 'asset_discovery',
+          asset_discovery: 'asset_discovery',
+          whatweb: 'tech_detection',
+          tech_detection: 'tech_detection',
+          http_security: 'http_security',
+          testssl: 'ssl_tls_analysis',
+          ssl_tls_analysis: 'ssl_tls_analysis',
+          waf_detection: 'waf_detection',
+          email_security: 'email_security',
+          api_security: 'api_security',
+          endpoint_discovery: 'endpoint_discovery',
+          privacy_compliance: 'privacy_compliance',
+          katana: 'endpoint_discovery',
+          nmap: 'network_exposure',
+          network_exposure: 'network_exposure',
+          nuclei: 'vulnerability_detection',
+          vulnerability_detection: 'vulnerability_detection',
+          security_intelligence: 'security_intelligence',
+          secret_finder: 'secret_detection',
+          secret_detection: 'secret_detection',
+          code_scanner: 'code_security',
+          code_security: 'code_security',
+          container_checker: 'container_security',
+          container_security: 'container_security',
+          dependency_analysis: 'dependency_analysis',
+          infrastructure_security: 'infrastructure_security',
+          cicd_security: 'cicd_security',
+          license_compliance: 'license_compliance',
+          repository_overview: 'repository_overview',
         };
 
         const templateFindings: any[] = [];
         for (const eng of engineIds) {
           const key = ENGINE_KEY_MAP[eng] || eng;
-          const picked = pickFindingsForEngine(key, target);
+          const picked = pickFindingsForEngine(key, target, profile || 'normal');
           for (const item of picked) {
             templateFindings.push({
               title: item.title,
@@ -250,6 +259,41 @@ export class ScanExecutor {
             category: c.category ?? 'General',
           });
         }
+      }
+
+      // Always persist to local fileStore for reliable unified sync
+      try {
+        const dataDir = process.env.NODE_ENV === 'production' ? '/tmp/securelens-data' : join(process.cwd(), '.securelens-data');
+        const findingsFile = join(dataDir, 'findings.json');
+        mkdirSync(dirname(findingsFile), { recursive: true });
+        let existing: any[] = [];
+        if (existsSync(findingsFile)) {
+          try { existing = JSON.parse(readFileSync(findingsFile, 'utf8')); } catch {}
+        }
+        const nowIso = new Date().toISOString();
+        const recordsToAppend = correlatedFindings.map((c, idx) => ({
+          id: `f-${scanId}-${idx}`,
+          scanId,
+          workspaceId: workspaceId || 'default-workspace',
+          title: c.title,
+          description: c.description || c.title,
+          severity: c.severity || 'MEDIUM',
+          status: 'NEW',
+          source: c.sources?.[0]?.tool || 'Live Scanner',
+          category: c.category || 'Vulnerability',
+          target,
+          cvss: c.cvss ?? null,
+          cwe: c.cwe ?? null,
+          owasp: c.owasp ?? null,
+          remediation: c.remediation || 'Review and apply latest security updates.',
+          createdAt: nowIso,
+          firstSeen: nowIso,
+          updatedAt: nowIso,
+        }));
+        const merged = [...recordsToAppend, ...existing.filter(e => e.scanId !== scanId)];
+        writeFileSync(findingsFile, JSON.stringify(merged, null, 2), 'utf8');
+      } catch (err: any) {
+        this.logger.warn(`FileStore findings write error: ${err.message}`);
       }
 
       const riskScore = this.computeRiskScore(createdFindings.map(f => f.severity));

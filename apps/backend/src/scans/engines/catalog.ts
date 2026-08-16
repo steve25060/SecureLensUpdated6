@@ -33,7 +33,7 @@ export const ENGINE_CATALOG: EngineDefinition[] = [
   // STAGE 1: DNS & SUBDOMAIN DISCOVERY
   // ============================================================================
   {
-    id: 'dnsx',
+    id: 'dns_check',
     name: 'DNS Resolution',
     description: 'Validates DNS records and resolves domain names to IP addresses.',
     category: 'Asset Discovery',
@@ -41,7 +41,7 @@ export const ENGINE_CATALOG: EngineDefinition[] = [
     modes: ['website', 'combined'],
   },
   {
-    id: 'subfinder',
+    id: 'subdomain_discovery',
     name: 'Subdomain Enumeration',
     description: 'Discovers subdomains using passive sources and API queries.',
     category: 'Asset Discovery',
@@ -53,7 +53,7 @@ export const ENGINE_CATALOG: EngineDefinition[] = [
   // STAGE 2: LIVE ASSET DETECTION
   // ============================================================================
   {
-    id: 'httpx',
+    id: 'asset_discovery',
     name: 'Live Host Detection',
     description: 'Identifies live HTTP/HTTPS services and probes for technologies.',
     category: 'Asset Discovery',
@@ -65,7 +65,7 @@ export const ENGINE_CATALOG: EngineDefinition[] = [
   // STAGE 3: TECHNOLOGY DETECTION
   // ============================================================================
   {
-    id: 'whatweb',
+    id: 'tech_detection',
     name: 'Technology Fingerprinting',
     description: 'Identifies web frameworks, CMS, plugins, and server software.',
     category: 'Technology Detection',
@@ -77,7 +77,7 @@ export const ENGINE_CATALOG: EngineDefinition[] = [
   // STAGE 4: SSL/TLS ANALYSIS
   // ============================================================================
   {
-    id: 'testssl',
+    id: 'ssl_tls_analysis',
     name: 'SSL/TLS Analysis',
     description: 'Comprehensive analysis of SSL/TLS configuration and certificate strength.',
     category: 'Encryption',
@@ -89,7 +89,7 @@ export const ENGINE_CATALOG: EngineDefinition[] = [
   // STAGE 5: ENDPOINT DISCOVERY
   // ============================================================================
   {
-    id: 'katana',
+    id: 'endpoint_discovery',
     name: 'Endpoint Discovery',
     description: 'Web crawling to discover API endpoints, forms, and sensitive pages.',
     category: 'Asset Discovery',
@@ -101,7 +101,7 @@ export const ENGINE_CATALOG: EngineDefinition[] = [
   // STAGE 6: NETWORK EXPOSURE MAPPING
   // ============================================================================
   {
-    id: 'nmap',
+    id: 'network_exposure',
     name: 'Network Port Scanning',
     description: 'Comprehensive port scanning and service enumeration.',
     category: 'Network Reconnaissance',
@@ -113,7 +113,7 @@ export const ENGINE_CATALOG: EngineDefinition[] = [
   // STAGE 7: VULNERABILITY DETECTION & NATIVE AUDITING
   // ============================================================================
   {
-    id: 'nuclei',
+    id: 'vulnerability_detection',
     name: 'Vulnerability Scanning',
     description: 'Template-based vulnerability scanning for CVEs and misconfigurations.',
     category: 'Vulnerability Detection',

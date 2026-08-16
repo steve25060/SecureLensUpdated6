@@ -34,8 +34,10 @@ export interface VulnerabilityType {
 export interface RecentScan {
   id: string;
   target: string;
+  targetUrl?: string | null;
+  repoUrl?: string | null;
   type: 'WEBSITE' | 'GITHUB' | 'COMBINED';
-  status: 'COMPLETED' | 'FAILED' | 'RUNNING' | 'PENDING';
+  status: 'COMPLETED' | 'FAILED' | 'RUNNING' | 'PENDING' | 'QUEUED';
   score: number | null;
   findingsCount: number;
   time: string;        // human-readable e.g. 'Just now', '2h ago'
@@ -46,6 +48,9 @@ export interface ScanActivity {
   detail: string;
   time: string;
   type: 'success' | 'info' | 'warning' | 'error';
+  scanType?: 'WEBSITE' | 'GITHUB' | 'COMBINED';
+  targetUrl?: string | null;
+  repoUrl?: string | null;
 }
 
 export interface DashboardOverview {

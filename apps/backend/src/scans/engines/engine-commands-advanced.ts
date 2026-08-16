@@ -638,7 +638,17 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     normal: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname 2>/dev/null || echo ""', timeout: 30 },
     aggressive: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname -resp -recon 2>/dev/null || echo ""', timeout: 60 },
   },
+  dns_check: {
+    fast: { cmd: 'echo "<TARGET>" | dnsx -json -t 50 2>/dev/null || echo ""', timeout: 15 },
+    normal: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname 2>/dev/null || echo ""', timeout: 30 },
+    aggressive: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname -resp -recon 2>/dev/null || echo ""', timeout: 60 },
+  },
   subfinder: {
+    fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15 2>/dev/null || echo ""', timeout: 20 },
+    normal: { cmd: 'subfinder -d <TARGET> -silent -max-time 45 2>/dev/null || echo ""', timeout: 60 },
+    aggressive: { cmd: 'subfinder -d <TARGET> -silent -all -max-time 120 2>/dev/null || echo ""', timeout: 130 },
+  },
+  subdomain_discovery: {
     fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15 2>/dev/null || echo ""', timeout: 20 },
     normal: { cmd: 'subfinder -d <TARGET> -silent -max-time 45 2>/dev/null || echo ""', timeout: 60 },
     aggressive: { cmd: 'subfinder -d <TARGET> -silent -all -max-time 120 2>/dev/null || echo ""', timeout: 130 },
@@ -648,7 +658,17 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     normal: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -timeout 10 2>/dev/null || echo ""', timeout: 60 },
     aggressive: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -server -web-server -favicon -jarm -timeout 20 2>/dev/null || echo ""', timeout: 120 },
   },
+  asset_discovery: {
+    fast: { cmd: 'echo "<TARGET>" | httpx -json -title -status-code -timeout 5 2>/dev/null || echo ""', timeout: 30 },
+    normal: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -timeout 10 2>/dev/null || echo ""', timeout: 60 },
+    aggressive: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -server -web-server -favicon -jarm -timeout 20 2>/dev/null || echo ""', timeout: 120 },
+  },
   whatweb: {
+    fast: { cmd: 'whatweb <TARGET> -a 1 --log-json=- 2>/dev/null || echo ""', timeout: 30 },
+    normal: { cmd: 'whatweb <TARGET> -a 3 --log-json=- 2>/dev/null || echo ""', timeout: 60 },
+    aggressive: { cmd: 'whatweb <TARGET> -a 4 --log-json=- 2>/dev/null || echo ""', timeout: 120 },
+  },
+  tech_detection: {
     fast: { cmd: 'whatweb <TARGET> -a 1 --log-json=- 2>/dev/null || echo ""', timeout: 30 },
     normal: { cmd: 'whatweb <TARGET> -a 3 --log-json=- 2>/dev/null || echo ""', timeout: 60 },
     aggressive: { cmd: 'whatweb <TARGET> -a 4 --log-json=- 2>/dev/null || echo ""', timeout: 120 },
@@ -658,7 +678,17 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     normal: { cmd: 'timeout 60 testssl --quiet --fast --poodle --freak <TARGET> 2>/dev/null || echo ""', timeout: 75 },
     aggressive: { cmd: 'timeout 150 testssl --quiet --full <TARGET> 2>/dev/null || echo ""', timeout: 160 },
   },
+  ssl_tls_analysis: {
+    fast: { cmd: 'timeout 30 testssl --quiet --fast <TARGET> 2>/dev/null || echo ""', timeout: 35 },
+    normal: { cmd: 'timeout 60 testssl --quiet --fast --poodle --freak <TARGET> 2>/dev/null || echo ""', timeout: 75 },
+    aggressive: { cmd: 'timeout 150 testssl --quiet --full <TARGET> 2>/dev/null || echo ""', timeout: 160 },
+  },
   katana: {
+    fast: { cmd: 'katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | head -30 || echo ""', timeout: 20 },
+    normal: { cmd: 'katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | head -100 || echo ""', timeout: 60 },
+    aggressive: { cmd: 'katana -u <TARGET> -jsonl -silent -d 5 -jc -ct 30 -timeout 20 2>/dev/null | head -250 || echo ""', timeout: 120 },
+  },
+  endpoint_discovery: {
     fast: { cmd: 'katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | head -30 || echo ""', timeout: 20 },
     normal: { cmd: 'katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | head -100 || echo ""', timeout: 60 },
     aggressive: { cmd: 'katana -u <TARGET> -jsonl -silent -d 5 -jc -ct 30 -timeout 20 2>/dev/null | head -250 || echo ""', timeout: 120 },
@@ -668,7 +698,17 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 90 },
     aggressive: { cmd: 'nmap -p- --open -sV -A -T4 <TARGET> 2>/dev/null || echo ""', timeout: 300 },
   },
+  network_exposure: {
+    fast: { cmd: 'nmap -F --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 45 },
+    normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 90 },
+    aggressive: { cmd: 'nmap -p- --open -sV -A -T4 <TARGET> 2>/dev/null || echo ""', timeout: 300 },
+  },
   nuclei: {
+    fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures 2>/dev/null || echo ""', timeout: 30 },
+    normal: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 8 -t http/exposures,http/vulnerabilities,http/misconfiguration 2>/dev/null || echo ""', timeout: 60 },
+    aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 15 -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,network 2>/dev/null || echo ""', timeout: 180 },
+  },
+  vulnerability_detection: {
     fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures 2>/dev/null || echo ""', timeout: 30 },
     normal: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 8 -t http/exposures,http/vulnerabilities,http/misconfiguration 2>/dev/null || echo ""', timeout: 60 },
     aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 15 -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,network 2>/dev/null || echo ""', timeout: 180 },

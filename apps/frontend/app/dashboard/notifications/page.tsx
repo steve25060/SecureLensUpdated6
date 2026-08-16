@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell, AlertTriangle, CheckCircle, Info, X, Archive, Filter, Mail, MailOpen, Trash2,
   Clock, Shield, AlertCircle, Zap, Settings, User, ExternalLink, ArrowRight,
+  Loader2, Activity, Sparkles, TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
 import { useLiveScanSync } from '@/lib/live-scan-store';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { formatRelativeTime, formatExactDateTime } from '@/lib/time-utils';
 
 const containerVariants = {
@@ -30,15 +32,65 @@ interface Notification {
   category: 'scan' | 'finding' | 'system' | 'account';
   target?: string;
   link?: string;
+  eventType?: string;
 }
 
 const SEED_NOTIFICATIONS: Notification[] = [
-  { id: 'n-1', title: 'Critical Finding Detected', message: 'SQL Injection vulnerability found in /api/auth/login endpoint. CVSS: 9.8', type: 'error', read: false, createdAt: new Date(Date.now() - 5 * 60000).toISOString(), category: 'finding', link: '/dashboard/findings' },
-  { id: 'n-2', title: 'Live Audit Completed', message: 'Scan of target website completed with 14 findings (1 critical, 4 high)', type: 'success', read: false, createdAt: new Date(Date.now() - 15 * 60000).toISOString(), category: 'scan', link: '/dashboard/reports' },
-  { id: 'n-3', title: 'Exposed AWS Access Key', message: 'Hardcoded AWS access key detected in .env.example by scanner engine', type: 'error', read: false, createdAt: new Date(Date.now() - 35 * 60000).toISOString(), category: 'finding', link: '/dashboard/findings' },
-  { id: 'n-4', title: 'Security Audit Report Ready', message: 'Your comprehensive executive compliance and vulnerability report is ready for export', type: 'info', read: true, createdAt: new Date(Date.now() - 90 * 60000).toISOString(), category: 'system', link: '/dashboard/reports' },
-  { id: 'n-5', title: 'Weak TLS Configuration', message: 'Target website supports TLS 1.0. Upgrade to TLS 1.3 recommended', type: 'warning', read: true, createdAt: new Date(Date.now() - 180 * 60000).toISOString(), category: 'finding', link: '/dashboard/findings' },
-  { id: 'n-6', title: 'Workspace Posture Updated', message: 'Production security workspace asset inventory synchronized', type: 'info', read: true, createdAt: new Date(Date.now() - 360 * 60000).toISOString(), category: 'system', link: '/dashboard/workspaces' },
+  {
+    id: 'n-1',
+    title: 'Critical Finding Detected',
+    message: 'SQL Injection vulnerability found in /api/auth/login endpoint. CVSS: 9.8',
+    type: 'error',
+    read: false,
+    createdAt: new Date(Date.now() - 5 * 60000).toISOString(),
+    category: 'finding',
+    link: '/dashboard/findings',
+    eventType: 'FINDING_ADDED'
+  },
+  {
+    id: 'n-2',
+    title: 'Live Audit Completed',
+    message: 'Scan of target website completed with 14 findings (1 critical, 4 high)',
+    type: 'success',
+    read: false,
+    createdAt: new Date(Date.now() - 15 * 60000).toISOString(),
+    category: 'scan',
+    link: '/dashboard/reports',
+    eventType: 'SCAN_COMPLETED'
+  },
+  {
+    id: 'n-3',
+    title: 'Exposed AWS Access Key',
+    message: 'Hardcoded AWS access key detected in .env.example by scanner engine',
+    type: 'error',
+    read: false,
+    createdAt: new Date(Date.now() - 35 * 60000).toISOString(),
+    category: 'finding',
+    link: '/dashboard/findings',
+    eventType: 'FINDING_ADDED'
+  },
+  {
+    id: 'n-4',
+    title: 'Security Audit Report Ready',
+    message: 'Your comprehensive executive compliance and vulnerability report is ready for export',
+    type: 'info',
+    read: true,
+    createdAt: new Date(Date.now() - 90 * 60000).toISOString(),
+    category: 'system',
+    link: '/dashboard/reports',
+    eventType: 'REPORT_GENERATED'
+  },
+  {
+    id: 'n-5',
+    title: 'Weak TLS Configuration',
+    message: 'Target website supports TLS 1.0. Upgrade to TLS 1.3 recommended',
+    type: 'warning',
+    read: true,
+    createdAt: new Date(Date.now() - 180 * 60000).toISOString(),
+    category: 'finding',
+    link: '/dashboard/findings',
+    eventType: 'FINDING_ADDED'
+  },
 ];
 
 const typeConfig = {
@@ -52,304 +104,331 @@ const categoryConfig = {
   scan: { label: 'Scan', icon: Zap, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
   finding: { label: 'Finding', icon: Shield, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
   system: { label: 'System', icon: Settings, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-  account: { label: 'Account', icon: User, color: 'text-gray-400', bg: 'bg-gray-500/10 border-gray-500/20' },
+  account: { label: 'Account', icon: User, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' }
 };
 
 export default function NotificationsPage() {
-  const { scans: liveScans, findings: liveFindings, lastUpdated } = useLiveScanSync();
+  const { scans: liveScans, findings: liveFindings } = useLiveScanSync(5000);
+  
+  // Real-time synchronization - listen to critical actionable events
+  const { isLive, eventCount, lastEventType, lastEventData, lastUpdate } = useRealtimeSync();
+  
   const [notifications, setNotifications] = useState<Notification[]>(SEED_NOTIFICATIONS);
-  const [deletedNotifIds, setDeletedNotifIds] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return JSON.parse(localStorage.getItem('sl_deleted_notifications') || '[]');
-      } catch {}
-    }
-    return [];
-  });
-  const [readNotifIds, setReadNotifIds] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return JSON.parse(localStorage.getItem('sl_read_notifications') || '[]');
-      } catch {}
-    }
-    return [];
-  });
-  const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [filter, setFilter] = useState<'all' | 'unread' | 'scan' | 'finding' | 'system'>('all');
+  const [toastQueue, setToastQueue] = useState<Array<{ id: string; message: string; type: string }>>([]);
+  const lastProcessedTimeRef = useRef<number>(0);
 
+  // Show toast ONLY for distinct, actionable real-time security events
   useEffect(() => {
-    let isMounted = true;
-    const fetchNotifications = () => {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
-      fetch('/api/notifications', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(data => {
-          if (!isMounted) return;
-          if (Array.isArray(data) && data.length > 0) {
-            const formatted: Notification[] = data.map((n: any) => ({
-              id: n.id,
-              title: n.title,
-              message: n.body || n.message || '',
-              type: (n.type || 'info') as Notification['type'],
-              read: Boolean(n.read),
-              createdAt: n.createdAt || new Date().toISOString(),
-              category: (n.category || 'scan') as Notification['category'],
-            }));
-            setNotifications(formatted);
-          }
-        })
-        .catch(() => {});
-    };
+    const NOTIFIABLE_EVENTS = ['SCAN_STARTED', 'SCAN_COMPLETED', 'SCAN_FAILED', 'FINDING_ADDED', 'REPORT_GENERATED'];
+    
+    if (lastEventType && lastEventData && NOTIFIABLE_EVENTS.includes(lastEventType) && lastUpdate > lastProcessedTimeRef.current) {
+      lastProcessedTimeRef.current = lastUpdate;
+      const toastId = `${lastEventType}-${Date.now()}`;
+      const toastMessage = generateToastMessage(lastEventType, lastEventData);
+      
+      setToastQueue(prev => [...prev.slice(-4), { id: toastId, message: toastMessage, type: lastEventType }]);
+      
+      // Add to persistent notifications list
+      const newNotification: Notification = {
+        id: toastId,
+        title: lastEventType.replace(/_/g, ' '),
+        message: toastMessage,
+        type: getNotificationType(lastEventType),
+        read: false,
+        createdAt: new Date().toISOString(),
+        category: getCategoryFromEvent(lastEventType),
+        eventType: lastEventType,
+      };
+      
+      setNotifications(prev => [newNotification, ...prev]);
 
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 3000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+      // Auto-remove toast after 4 seconds
+      const timer = setTimeout(() => {
+        setToastQueue(prev => prev.filter(t => t.id !== toastId));
+      }, 4000);
 
-  const activeNotifications = React.useMemo(() => {
-    const liveItems: Notification[] = [];
+      return () => clearTimeout(timer);
+    }
+  }, [lastEventType, lastEventData, lastUpdate]);
 
-    liveScans.forEach((ls) => {
-      liveItems.push({
-        id: `live-notif-scan-${ls.id}`,
-        title: `Live Scan Finished: ${ls.target}`,
-        message: `Security audit completed with ${ls.findingsCount || 0} vulnerabilities detected across ${ls.engines?.length || 5} engines.`,
-        type: ls.findingsCount > 0 ? 'warning' : 'success',
-        read: readNotifIds.includes(`live-notif-scan-${ls.id}`),
-        createdAt: ls.createdAt || new Date().toISOString(),
-        category: 'scan',
-        target: ls.target,
-        link: `/dashboard/live-scan?target=${encodeURIComponent(ls.target)}`,
-      });
-    });
-
-    const critFindings = liveFindings.filter(f => f.severity === 'CRITICAL');
-    critFindings.slice(0, 3).forEach(cf => {
-      liveItems.push({
-        id: `live-notif-crit-${cf.id}`,
-        title: `🔴 Critical Vulnerability: ${cf.title}`,
-        message: `Discovered on target ${cf.target} by ${cf.source}. Immediate remediation required.`,
-        type: 'error',
-        read: readNotifIds.includes(`live-notif-crit-${cf.id}`),
-        createdAt: cf.createdAt || new Date().toISOString(),
-        category: 'finding',
-        target: cf.target,
-        link: `/dashboard/findings?target=${encodeURIComponent(cf.target)}`,
-      });
-    });
-
-    const combined = [...liveItems, ...notifications.map(n => ({
-      ...n,
-      read: n.read || readNotifIds.includes(n.id),
-    }))];
-
-    const uniqueMap = new Map();
-    combined.forEach(item => {
-      if (!uniqueMap.has(item.id) && !deletedNotifIds.includes(item.id)) {
-        uniqueMap.set(item.id, item);
-      }
-    });
-    return Array.from(uniqueMap.values());
-  }, [liveScans, liveFindings, notifications, deletedNotifIds, readNotifIds]);
-
-  const markAsRead = async (id: string) => {
-    setReadNotifIds(prev => {
-      const updated = [...prev, id];
-      if (typeof window !== 'undefined') localStorage.setItem('sl_read_notifications', JSON.stringify(updated));
-      return updated;
-    });
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
-    try {
-      await fetch(`/api/notifications/${id}/read`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-    } catch {}
-  };
-
-  const deleteNotification = async (id: string) => {
-    setDeletedNotifIds(prev => {
-      const updated = [...prev, id];
-      if (typeof window !== 'undefined') localStorage.setItem('sl_deleted_notifications', JSON.stringify(updated));
-      return updated;
-    });
-    setNotifications(prev => prev.filter(n => n.id !== id));
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
-    try {
-      await fetch(`/api/notifications/${id}`, {
-        method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-    } catch {}
-  };
-
-  const markAllRead = async () => {
-    const allIds = activeNotifications.map(n => n.id);
-    setReadNotifIds(prev => {
-      const updated = Array.from(new Set([...prev, ...allIds]));
-      if (typeof window !== 'undefined') localStorage.setItem('sl_read_notifications', JSON.stringify(updated));
-      return updated;
-    });
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
-    try {
-      await fetch('/api/notifications/read-all', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-    } catch {}
-  };
-
-  const filtered = activeNotifications
-    .filter(n => {
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter(n => {
+      if (filter === 'all') return true;
       if (filter === 'unread') return !n.read;
-      if (filter === 'read') return n.read;
-      return true;
-    })
-    .filter(n => {
-      if (categoryFilter === 'all') return true;
-      return n.category === categoryFilter;
+      return n.category === filter;
     });
+  }, [notifications, filter]);
 
-  const unreadCount = activeNotifications.filter(n => !n.read).length;
-
-  const timeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+  const handleMarkAsRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
+
+  const handleMarkAllAsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const handleDelete = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
+  const handleDeleteAll = () => {
+    setNotifications([]);
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
-      <motion.div variants={itemVariants} className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Notifications</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {unreadCount > 0 && (
-            <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-              onClick={markAllRead}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs text-gray-400 hover:text-gray-200 hover:bg-white/[0.05] transition-all cursor-pointer">
-              <MailOpen size={13} /> Mark all read
-            </motion.button>
-          )}
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs text-gray-400 hover:text-gray-200 hover:bg-white/[0.05] transition-all cursor-pointer">
-            <Archive size={13} /> Archive
-          </motion.button>
-        </div>
-      </motion.div>
-
-      <motion.div variants={itemVariants} className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 bg-white/[0.02] rounded-xl p-1 border border-white/[0.06]">
-          {(['all', 'unread', 'read'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all capitalize cursor-pointer ${
-                filter === f ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-gray-500 hover:text-gray-300'
-              }`}>
-              {f}
-              {f === 'unread' && unreadCount > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 bg-violet-500 text-white rounded-full text-[10px]">{unreadCount}</span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <div className="h-5 w-px bg-white/[0.06]" />
-
-        <div className="flex items-center gap-1 bg-white/[0.02] rounded-xl p-1 border border-white/[0.06]">
-          {(['all', 'scan', 'finding', 'system', 'account'] as const).map(c => (
-            <button key={c} onClick={() => setCategoryFilter(c)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all capitalize cursor-pointer ${
-                categoryFilter === c ? 'bg-white/[0.06] text-white' : 'text-gray-500 hover:text-gray-300'
-              }`}>
-              {c === 'all' ? 'All Types' : c}
-            </button>
-          ))}
-        </div>
-      </motion.div>
-
-      <AnimatePresence mode="wait">
-        {filtered.length === 0 ? (
-          <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="text-center py-16 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-            <Bell size={40} className="mx-auto text-gray-600 mb-3" />
-            <p className="text-sm text-gray-500">
-              {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">We&apos;ll notify you when something important happens.</p>
+    <motion.div
+      className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
+      {/* Real-time Toast Notifications */}
+      <AnimatePresence>
+        {toastQueue.map((toast) => (
+          <motion.div
+            key={toast.id}
+            className="fixed bottom-4 right-4 p-4 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-w-sm z-50"
+            initial={{ opacity: 0, x: 400 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 400 }}
+          >
+            <div className="flex items-start gap-3">
+              <Sparkles className="w-5 h-5 text-violet-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-white">{toast.message}</p>
+                <p className="text-xs text-slate-400 mt-1">{toast.type}</p>
+              </div>
+            </div>
           </motion.div>
-        ) : (
-          <motion.div key="list" variants={containerVariants} initial="hidden" animate="visible" className="space-y-2.5">
-            {filtered.map((notif) => {
-              const config = typeConfig[notif.type];
-              const catConfig = categoryConfig[notif.category];
-              const Icon = config.icon;
-              const CatIcon = catConfig.icon;
-              return (
-                <motion.div key={notif.id} layout variants={itemVariants}
-                  className={`rounded-xl border p-4 hover:bg-white/[0.03] transition-all group ${
-                    notif.read ? 'bg-white/[0.01] border-white/[0.04] opacity-60' : `${config.bg} ${config.border}`
-                  }`}>
-                  <div className="flex items-start gap-4">
-                    <div className={`p-2 rounded-lg ${config.bg} ${config.border} border shrink-0 mt-0.5`}>
-                      <Icon size={16} className={config.color} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h3 className={`text-sm font-semibold ${notif.read ? 'text-gray-400' : 'text-white'}`}>{notif.title}</h3>
-                        {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />}
+        ))}
+      </AnimatePresence>
+
+      {/* Header with Real-time Status */}
+      <div className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur border-b border-slate-700/50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg">
+                <Bell className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-white">Notifications</h1>
+                <p className="text-sm text-slate-400">Real-time security alerts and updates</p>
+              </div>
+            </div>
+
+            {/* Live Status & Event Counter Badge */}
+            <div className="flex items-center gap-3">
+              <motion.div
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-lg border border-slate-700"
+                animate={{ scale: isLive ? 1 : 0.95 }}
+              >
+                <Activity className={`w-4 h-4 ${isLive ? 'text-green-400 animate-pulse' : 'text-red-400'}`} />
+                <span className="text-sm text-slate-300">{isLive ? 'Live' : 'Offline'}</span>
+              </motion.div>
+
+              {eventCount > 0 && (
+                <motion.div
+                  className="px-3 py-2 bg-violet-500/10 rounded-lg border border-violet-500/20"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                >
+                  <span className="text-sm font-bold text-violet-400">{eventCount}</span>
+                </motion.div>
+              )}
+
+              {unreadCount > 0 && (
+                <div className="px-4 py-2 bg-red-500/10 rounded-lg border border-red-500/20">
+                  <span className="text-sm font-semibold text-red-400">{unreadCount} unread</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Filter & Action Bar */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2 flex-wrap">
+              {(['all', 'unread', 'scan', 'finding', 'system'] as const).map(f => (
+                <motion.button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                    filter === f
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  }`}
+                  whileHover={{ scale: 1.05 }}
+                >
+                  {f.charAt(0).toUpperCase() + f.slice(1)}
+                </motion.button>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleMarkAllAsRead}
+                disabled={unreadCount === 0}
+                className="px-3 py-2 text-sm bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Mark all read
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                disabled={notifications.length === 0}
+                className="px-3 py-2 text-sm bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear all
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Notifications List */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AnimatePresence mode="popLayout">
+          {filteredNotifications.length > 0 ? (
+            <motion.div className="space-y-3" variants={containerVariants}>
+              {filteredNotifications.map((notification, i) => {
+                const typeIcon = typeConfig[notification.type].icon;
+                const categoryInfo = categoryConfig[notification.category];
+                
+                return (
+                  <motion.div
+                    key={notification.id}
+                    layout
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    className={`p-4 rounded-lg border transition-all group hover:shadow-lg ${
+                      notification.read
+                        ? 'bg-slate-800/30 border-slate-700/30'
+                        : 'bg-slate-800/60 border-slate-700/60 shadow-lg'
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Icon */}
+                      <div className={`p-2 rounded-lg flex-shrink-0 ${typeConfig[notification.type].bg}`}>
+                        {React.createElement(typeIcon, {
+                          className: `w-5 h-5 ${typeConfig[notification.type].color}`
+                        })}
                       </div>
-                      <p className="text-xs text-gray-500 leading-relaxed">{notif.message}</p>
-                      <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="flex items-center gap-1.5 text-[11px] text-gray-400" title={formatExactDateTime(notif.createdAt)}>
-                          <Clock size={10} className="text-violet-400" />{formatRelativeTime(notif.createdAt)}
-                        </span>
-                        <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md border ${catConfig.bg}`}>
-                          <CatIcon size={9} className={catConfig.color} />{catConfig.label}
-                        </span>
-                        {notif.link && (
-                          <Link href={notif.link} className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1 font-medium transition-colors ml-auto">
-                            View <ArrowRight size={11} />
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-white truncate">{notification.title}</h3>
+                            <p className="text-sm text-slate-300 mt-1 line-clamp-2">{notification.message}</p>
+                          </div>
+                          {!notification.read && (
+                            <div className="w-2 h-2 bg-violet-500 rounded-full flex-shrink-0 mt-2" />
+                          )}
+                        </div>
+
+                        {/* Metadata */}
+                        <div className="flex items-center gap-3 mt-3">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border ${categoryInfo.bg}`}>
+                            {React.createElement(categoryInfo.icon, { className: 'w-3 h-3' })}
+                            {categoryInfo.label}
+                          </span>
+                          <span className="text-xs text-slate-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatRelativeTime(notification.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {notification.link && (
+                          <Link href={notification.link}>
+                            <button className="p-2 hover:bg-slate-700 rounded transition-colors">
+                              <ArrowRight className="w-4 h-4 text-slate-400" />
+                            </button>
                           </Link>
                         )}
+                        {!notification.read && (
+                          <button
+                            onClick={() => handleMarkAsRead(notification.id)}
+                            className="p-2 hover:bg-slate-700 rounded transition-colors"
+                            title="Mark as read"
+                          >
+                            <MailOpen className="w-4 h-4 text-slate-400" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(notification.id)}
+                          className="p-2 hover:bg-red-500/10 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <X className="w-4 h-4 text-slate-400 hover:text-red-400" />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
-                      {!notif.read && (
-                        <button onClick={() => markAsRead(notif.id)}
-                          className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-violet-400 transition-colors cursor-pointer"
-                          title="Mark as read">
-                          <MailOpen size={14} />
-                        </button>
-                      )}
-                      <button onClick={() => deleteNotification(notif.id)}
-                        className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-red-400 transition-colors cursor-pointer"
-                        title="Delete notification">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
+          ) : (
+            <motion.div
+              className="text-center py-12"
+              variants={itemVariants}
+            >
+              <Bell className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+              <p className="text-slate-400">No notifications yet. Your real-time alerts will appear here.</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
+}
+
+// Helper functions
+function generateToastMessage(eventType: string, data: any): string {
+  switch (eventType) {
+    case 'SCAN_STARTED':
+      return `🚀 Scan started on ${data.target || 'new target'}`;
+    case 'SCAN_COMPLETED':
+      return `✅ Scan completed: ${data.findingCount || 0} findings`;
+    case 'SCAN_FAILED':
+      return `❌ Scan failed: ${data.reason || 'Unknown error'}`;
+    case 'FINDING_ADDED':
+      return `🔴 New finding: ${data.title} (${data.severity || 'unknown'})`;
+    case 'FINDING_UPDATED':
+      return `📝 Finding updated: ${data.title}`;
+    case 'FINDING_DELETED':
+      return `🗑️ Finding removed: ${data.title}`;
+    case 'REPORT_GENERATED':
+      return `📊 Report generated: ${data.name || 'New report'}`;
+    case 'WORKSPACE_CREATED':
+      return `📁 New workspace: ${data.name || 'Untitled'}`;
+    case 'NOTIFICATION_RECEIVED':
+      return `📢 ${data.message || 'New notification'}`;
+    case 'SETTINGS_CHANGED':
+      return `⚙️ Settings updated`;
+    default:
+      return `📌 ${eventType}: ${data.message || 'Event received'}`;
+  }
+}
+
+function getNotificationType(eventType: string): 'info' | 'warning' | 'success' | 'error' {
+  if (eventType.includes('SCAN') || eventType.includes('REPORT')) return 'info';
+  if (eventType.includes('COMPLETED') || eventType.includes('SUCCESS')) return 'success';
+  if (eventType.includes('FAILED') || eventType.includes('DELETED')) return 'error';
+  if (eventType.includes('CRITICAL') || eventType.includes('HIGH')) return 'error';
+  return 'warning';
+}
+
+function getCategoryFromEvent(eventType: string): 'scan' | 'finding' | 'system' | 'account' {
+  if (eventType.includes('SCAN')) return 'scan';
+  if (eventType.includes('FINDING') || eventType.includes('REPORT')) return 'finding';
+  if (eventType.includes('ACCOUNT') || eventType.includes('USER')) return 'account';
+  return 'system';
 }

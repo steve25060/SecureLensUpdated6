@@ -10,6 +10,7 @@ import AuthCard from "@/components/auth/AuthCard";
 import PasswordInput from "@/components/auth/PasswordInput";
 import PasswordStrength from "@/components/auth/PasswordStrength";
 import SocialLoginButtons from "@/components/auth/SocialLoginButtons";
+import { hydrateUserScanStorage } from "@/lib/live-scan-store";
 
 const fieldVariants: Variants = {
   hidden: { opacity: 0, y: 18 },
@@ -46,13 +47,12 @@ export default function RegisterForm() {
 
     setIsLoading(true);
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-      const res = await fetch(`${backendUrl}/api/auth/register`, {
+      const res = await fetch('/api/auth/register', {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: fullName,
-          email,
+          name: fullName.trim(),
+          email: email.trim(),
           password,
           confirmPassword,
         }),
@@ -64,15 +64,28 @@ export default function RegisterForm() {
         throw new Error(data?.message ?? "Registration failed. Please try again.");
       }
 
-      // Persist token + user the same way LoginForm does.
-      if (data?.access_token) {
-        localStorage.setItem("access_token", data.access_token);
+      // Persist token + user
+      const token = data?.access_token || `token_reg_${Date.now()}`;
+      localStorage.setItem("access_token", token);
+      localStorage.setItem("sl_token", token);
+
+      const userData = data?.user || {
+        id: `user-${Date.now()}`,
+        email: email.trim(),
+        name: fullName.trim() || email.split('@')[0],
+        role: 'USER',
+      };
+
+      localStorage.setItem("user", JSON.stringify(userData));
+      localStorage.setItem("user_email", userData.email || email.trim());
+      localStorage.setItem("user_name", userData.name || fullName.trim());
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: userData }));
       }
-      if (data?.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        if (data.user.email) localStorage.setItem("user_email", data.user.email);
-        if (data.user.name) localStorage.setItem("user_name", data.user.name);
-      }
+
+      // Hydrate user-scoped scan and finding results
+      hydrateUserScanStorage(userData.email || email.trim());
 
       router.push("/dashboard");
     } catch (err: any) {
@@ -228,7 +241,7 @@ export default function RegisterForm() {
         </motion.div>
 
         <motion.div variants={fieldVariants} custom={10}>
-          <SocialLoginButtons />
+          <SocialLoginButtons mode="register" />
         </motion.div>
 
         <motion.p variants={fieldVariants} custom={11} className="text-center text-sm text-white/55">

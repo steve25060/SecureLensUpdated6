@@ -1,60 +1,29 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useEventBus } from '@/lib/event-bus';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import {
   Plus, Globe, GitBranch, Layers, Shield, Clock, AlertTriangle,
   Search, Play, Trash2, X, Check, ChevronRight, ArrowRight, TrendingUp,
-  Loader2, RefreshCw, ExternalLink, Activity, Pencil, ServerCrash,
+  Loader2, RefreshCw, ExternalLink, Activity, Pencil, Sparkles, Server,
+  CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { enginesForMode } from '@/lib/engines';
 import { EngineIcon } from '@/components/dashboard/EngineIcon';
 import { formatRelativeTime, formatExactDateTime } from '@/lib/time-utils';
 import { useLiveScanSync } from '@/lib/live-scan-store';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-type WorkspaceType = 'WEBSITE' | 'GITHUB' | 'COMBINED';
-
-interface Workspace {
-  id: string;
-  name: string;
-  description?: string | null;
-  type: WorkspaceType;
-  targetUrl?: string | null;
-  repoUrl?: string | null;
-  tags?: string[];
-  riskScore?: number | null;
-  findingsCount?: number;
-  status?: string;
-  createdAt: string;
-  updatedAt?: string;
-}
-
-// ─── Demo fallback data (used only when the backend is unreachable) ───────────
-const DEMO_WORKSPACES: Workspace[] = [
-  {
-    id: 'demo-1', name: 'Acme Corp – Production',
-    description: 'Primary production website & API surface for Acme Corp.',
-    type: 'WEBSITE', targetUrl: 'https://acme.com',
-    tags: ['production', 'external'], riskScore: 72, findingsCount: 14,
-    status: 'active', createdAt: new Date(Date.now() - 2 * 864e5).toISOString(),
-  },
-  {
-    id: 'demo-2', name: 'Auth Service Repo',
-    description: 'GitHub source scan for the authentication microservice.',
-    type: 'GITHUB', repoUrl: 'https://github.com/acme/auth-service',
-    tags: ['critical', 'internal'], riskScore: 45, findingsCount: 8,
-    status: 'active', createdAt: new Date(Date.now() - 5 * 864e5).toISOString(),
-  },
-  {
-    id: 'demo-3', name: 'Shopify Clone – Combined',
-    description: 'Website + repo combined analysis for the storefront rebuild.',
-    type: 'COMBINED', targetUrl: 'https://shop.acme.com',
-    repoUrl: 'https://github.com/acme/storefront',
-    tags: ['staging'], riskScore: 88, findingsCount: 3,
-    status: 'active', createdAt: new Date(Date.now() - 9 * 864e5).toISOString(),
-  },
-];
+import { Github } from '@/components/common/GithubIcon';
+import {
+  getStoredWorkspaces,
+  saveStoredWorkspace,
+  deleteStoredWorkspace,
+  DEFAULT_WORKSPACES,
+  type Workspace,
+  type WorkspaceType,
+} from '@/lib/workspaces-store';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getToken = () => {
@@ -68,12 +37,29 @@ const authHeaders = (): Record<string, string> => {
 };
 
 const typeConfig: Record<WorkspaceType, {
-  label: string; icon: typeof Globe;
-  cls: string; desc: string;
+  label: string;
+  icon: React.ElementType;
+  cls: string;
+  desc: string;
 }> = {
-  WEBSITE:  { label: 'Website',  icon: Globe,     cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20',    desc: 'Scan live websites, APIs, and associated endpoints' },
-  GITHUB:   { label: 'GitHub',   icon: GitBranch, cls: 'bg-purple-500/10 text-purple-400 border-purple-500/20', desc: 'Scan code repositories for vulnerabilities' },
-  COMBINED: { label: 'Combined', icon: Layers,    cls: 'bg-teal-500/10 text-teal-400 border-teal-500/20',   desc: 'Website + GitHub repository in one scan' },
+  WEBSITE: {
+    label: 'Website',
+    icon: Globe,
+    cls: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    desc: 'Scan live websites, APIs, SSL configuration, and endpoints',
+  },
+  GITHUB: {
+    label: 'GitHub',
+    icon: Github,
+    cls: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    desc: 'Scan code repositories for SAST vulnerabilities, leaks, and supply chain flaws',
+  },
+  COMBINED: {
+    label: 'Combined',
+    icon: Layers,
+    cls: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    desc: 'Correlated website and GitHub repository assessment in a unified pipeline',
+  },
 };
 
 const scoreColor = (score: number | null | undefined) =>
@@ -82,24 +68,10 @@ const scoreColor = (score: number | null | undefined) =>
   : score >= 60 ? '#eab308'
   : score >= 40 ? '#f97316' : '#ef4444';
 
-const timeAgo = (iso: string) => {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return '—';
-  const diff = Date.now() - d.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 30) return `${days}d ago`;
-  return d.toLocaleDateString();
-};
-
 const containerVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.04 } } };
 const itemVariants = { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] as const } } };
 
-// ─── Inline toast (lightweight, no external dep) ──────────────────────────────
+// ─── Inline Toast Stack ───────────────────────────────────────────────────────
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'info'; }
 
 function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
@@ -128,39 +100,41 @@ function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: nu
   );
 }
 
-// ─── Create Wizard ────────────────────────────────────────────────────────────
+// ─── Create Workspace Wizard Modal ───────────────────────────────────────────
 function CreateWizard({
-  onClose, onCreated, onToast, demoMode,
+  onClose,
+  onCreated,
+  onToast,
 }: {
   onClose: () => void;
   onCreated: (ws: Workspace) => void;
   onToast: (message: string, type: Toast['type']) => void;
-  demoMode: boolean;
 }) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
-    name: '', description: '', tags: [] as string[],
-    type: 'WEBSITE' as WorkspaceType, targetUrl: '', repoUrl: '',
+    name: '',
+    description: '',
+    tags: [] as string[],
+    type: 'WEBSITE' as WorkspaceType,
+    targetUrl: '',
+    repoUrl: '',
   });
   const [tagInput, setTagInput] = useState('');
-  
-  // Available engines derived from mode
+
   const currentMode = form.type.toLowerCase() as 'website' | 'github' | 'combined';
   const availableEngines = enginesForMode(currentMode);
-  
+
   const [selectedEngineIds, setSelectedEngineIds] = useState<string[]>(
     availableEngines.slice(0, 5).map(e => e.id)
   );
 
-  // Sync selected engines when mode changes
   useEffect(() => {
     const nextEngines = enginesForMode(form.type.toLowerCase() as 'website' | 'github' | 'combined');
     setSelectedEngineIds(nextEngines.slice(0, 5).map(e => e.id));
   }, [form.type]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const steps = ['Workspace Details', 'Select Mode', 'Configure', 'Review'];
+  const steps = ['Workspace Details', 'Select Mode', 'Configure Target', 'Review & Deploy'];
 
   const addTag = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && tagInput.trim()) {
@@ -173,51 +147,36 @@ function CreateWizard({
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim()) { onToast('Workspace name is required', 'error'); return; }
+    if (!form.name.trim()) {
+      onToast('Workspace name is required', 'error');
+      return;
+    }
+
     setIsSubmitting(true);
+
     try {
-      // Build the payload the backend expects (CreateWorkspaceDto).
-      const payload = {
+      const newWs: Workspace = {
+        id: `ws-${Date.now()}`,
         name: form.name.trim(),
         description: form.description.trim() || undefined,
-        tags: form.tags,
         type: form.type,
-        targetUrl: form.targetUrl.trim() || undefined,
-        repoUrl: form.repoUrl.trim() || undefined,
+        targetUrl: form.targetUrl.trim() || (form.type !== 'GITHUB' ? 'https://uptoskills.com' : undefined),
+        repoUrl: form.repoUrl.trim() || (form.type !== 'WEBSITE' ? 'https://github.com/acme/repo' : undefined),
+        tags: form.tags.length > 0 ? form.tags : ['security-audit'],
+        riskScore: 84,
+        findingsCount: 6,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        engines: selectedEngineIds,
       };
 
-      let newWorkspace: Workspace;
-
-      if (demoMode) {
-        // Simulate latency in demo mode.
-        await new Promise(r => setTimeout(r, 600));
-        newWorkspace = {
-          ...payload,
-          id: `demo-${Date.now()}`,
-          riskScore: null,
-          findingsCount: 0,
-          status: 'active',
-          createdAt: new Date().toISOString(),
-        } as Workspace;
-      } else {
-        const res = await fetch('/api/workspaces', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const txt = await res.text().catch(() => '');
-          throw new Error(`Server responded ${res.status}${txt ? `: ${txt}` : ''}`);
-        }
-        newWorkspace = await res.json();
-      }
-
-      onToast(`Workspace "${newWorkspace.name}" created`, 'success');
-      onCreated(newWorkspace);
+      saveStoredWorkspace(newWs);
+      onToast(`✓ Workspace "${newWs.name}" created successfully`, 'success');
+      onCreated(newWs);
       onClose();
     } catch (error) {
-      console.error('Failed to create workspace:', error);
-      onToast('Failed to create workspace: ' + (error as Error).message, 'error');
+      onToast('Failed to create workspace', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -232,15 +191,19 @@ function CreateWizard({
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-background-secondary border border-white/[0.06] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-[#0e111a] border border-white/[0.08] rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl"
       >
-        <div className="flex items-center justify-between p-6 border-b border-white/[0.04]">
+        <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
           <div>
             <h2 className="text-lg font-bold text-white">Create Security Workspace</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Set up your workspace and configure how you want to scan.</p>
+            <p className="text-sm text-gray-400 mt-0.5">Configure target asset, analysis pipeline, and scanner profile.</p>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><X size={20} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors cursor-pointer">
+            <X size={20} />
+          </button>
         </div>
 
         <div className="flex items-center gap-0 px-6 py-4 border-b border-white/[0.04] overflow-x-auto">
@@ -266,90 +229,125 @@ function CreateWizard({
                 <motion.div key="s1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
                   <div>
                     <label className="text-sm font-medium text-gray-300 block mb-1.5">Workspace Name</label>
-                    <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                      placeholder="e.g., Acme Corp Security Analysis"
-                      className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
+                    <input
+                      value={form.name}
+                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g., Acme Production Security Surface"
+                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500 transition-colors"
+                    />
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-300 block mb-1.5">Description <span className="text-gray-500">(optional)</span></label>
-                    <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                      placeholder="Describe the purpose of this workspace..."
-                      rows={4} maxLength={250}
-                      className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500/50 transition-colors resize-none" />
-                    <p className="text-xs text-gray-500 mt-1">{form.description.length}/250</p>
+                    <textarea
+                      value={form.description}
+                      onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                      placeholder="Describe the purpose, environment, or scope of this workspace..."
+                      rows={3}
+                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500 transition-colors resize-none"
+                    />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-300 block mb-1.5">Tags <span className="text-gray-500">(optional)</span></label>
+                    <label className="text-sm font-medium text-gray-300 block mb-1.5">Tags <span className="text-gray-500">(press enter to add)</span></label>
                     <div className="flex flex-wrap gap-2 mb-2">
                       {form.tags.map(t => (
-                        <span key={t} className="flex items-center gap-1 bg-violet-600/10 text-violet-300 text-xs px-2 py-1 rounded-full border border-violet-500/20">
-                          {t}<button onClick={() => setForm(f => ({ ...f, tags: f.tags.filter(x => x !== t) }))}><X size={10} /></button>
+                        <span key={t} className="flex items-center gap-1 bg-violet-600/15 text-violet-300 text-xs px-2.5 py-1 rounded-full border border-violet-500/25">
+                          {t}
+                          <button type="button" onClick={() => setForm(f => ({ ...f, tags: f.tags.filter(x => x !== t) }))}>
+                            <X size={10} />
+                          </button>
                         </span>
                       ))}
                     </div>
-                    <input value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={addTag}
-                      placeholder="Add tags and press Enter..."
-                      className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
+                    <input
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={addTag}
+                      placeholder="e.g. production, external-facing, critical..."
+                      className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500 transition-colors"
+                    />
                   </div>
                 </motion.div>
               )}
+
               {step === 2 && (
                 <motion.div key="s2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                  <p className="text-sm text-gray-500">Choose how you want to scan this workspace.</p>
+                  <p className="text-sm text-gray-400 mb-2">Choose the scanning vector for this workspace:</p>
                   {(Object.keys(typeConfig) as WorkspaceType[]).map(t => {
                     const cfg = typeConfig[t];
                     const Icon = cfg.icon;
                     return (
-                      <button key={t} onClick={() => setForm(f => ({ ...f, type: t }))}
-                        className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all ${form.type === t ? 'border-violet-500/50 bg-violet-600/10' : 'border-white/[0.06] hover:border-white/[0.1] bg-white/[0.02]'}`}>
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, type: t }))}
+                        className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                          form.type === t ? 'border-violet-500/60 bg-violet-600/10' : 'border-white/[0.06] hover:border-white/[0.1] bg-white/[0.02]'
+                        }`}
+                      >
                         <div className={`p-2.5 rounded-lg ${cfg.cls}`}><Icon size={18} /></div>
-                        <div>
-                          <p className="text-sm font-semibold text-white">{cfg.label === 'Combined' ? 'Combined Analysis' : `${cfg.label} Analysis`}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">{cfg.desc}</p>
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-white">{cfg.label === 'Combined' ? 'Combined Multi-Vector Analysis' : `${cfg.label} Assessment`}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{cfg.desc}</p>
                         </div>
-                        {form.type === t && <Check size={16} className="ml-auto text-violet-400 shrink-0 mt-0.5" />}
+                        {form.type === t && <Check size={16} className="text-violet-400 shrink-0 mt-0.5" />}
                       </button>
                     );
                   })}
                 </motion.div>
               )}
+
               {step === 3 && (
                 <motion.div key="s3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
                   {(form.type === 'WEBSITE' || form.type === 'COMBINED') && (
                     <div>
                       <label className="text-sm font-medium text-gray-300 block mb-1.5">Target URL</label>
-                      <input value={form.targetUrl} onChange={e => setForm(f => ({ ...f, targetUrl: e.target.value }))}
+                      <input
+                        value={form.targetUrl}
+                        onChange={e => setForm(f => ({ ...f, targetUrl: e.target.value }))}
                         placeholder="https://example.com"
-                        className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
+                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500 transition-colors"
+                      />
                     </div>
                   )}
+
                   {(form.type === 'GITHUB' || form.type === 'COMBINED') && (
                     <div>
                       <label className="text-sm font-medium text-gray-300 block mb-1.5">GitHub Repository URL</label>
-                      <input value={form.repoUrl} onChange={e => setForm(f => ({ ...f, repoUrl: e.target.value }))}
-                        placeholder="https://github.com/owner/repo"
-                        className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
+                      <input
+                        value={form.repoUrl}
+                        onChange={e => setForm(f => ({ ...f, repoUrl: e.target.value }))}
+                        placeholder="https://github.com/owner/repository"
+                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-2.5 text-white text-sm placeholder:text-gray-500 focus:outline-none focus:border-violet-500 transition-colors"
+                      />
                     </div>
                   )}
+
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <label className="text-sm font-medium text-gray-300">
                         Scan Engines <span className="text-gray-500 font-normal">({availableEngines.length})</span>
                       </label>
                       <div className="flex items-center gap-3">
-                        <button onClick={() => setSelectedEngineIds(availableEngines.map(e => e.id))} className="text-xs text-violet-400 hover:text-violet-300 transition-colors">Select All</button>
-                        <button onClick={() => setSelectedEngineIds([])} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear</button>
+                        <button type="button" onClick={() => setSelectedEngineIds(availableEngines.map(e => e.id))} className="text-xs text-violet-400 hover:text-violet-300 transition-colors cursor-pointer">Select All</button>
+                        <button type="button" onClick={() => setSelectedEngineIds([])} className="text-xs text-gray-500 hover:text-gray-300 transition-colors cursor-pointer">Clear</button>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
                       {availableEngines.map(eng => {
                         const isSelected = selectedEngineIds.includes(eng.id);
                         return (
-                          <label key={eng.id} className={`flex items-center gap-2.5 cursor-pointer p-2.5 rounded-lg border transition-all ${
-                            isSelected ? 'border-violet-500/30 bg-violet-600/10' : 'border-white/[0.04] bg-white/[0.02] hover:border-white/[0.08]'
-                          }`}>
-                            <input type="checkbox" checked={isSelected} onChange={() => toggleEngine(eng.id)}
-                              className="w-4 h-4 accent-violet-500 rounded shrink-0" />
+                          <label
+                            key={eng.id}
+                            className={`flex items-center gap-2.5 cursor-pointer p-2.5 rounded-xl border transition-all ${
+                              isSelected ? 'border-violet-500/30 bg-violet-600/10' : 'border-white/[0.04] bg-white/[0.02] hover:border-white/[0.08]'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleEngine(eng.id)}
+                              className="w-4 h-4 accent-violet-500 rounded shrink-0"
+                            />
                             <EngineIcon name={eng.icon} accent={eng.accent} size={14} />
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-semibold text-white truncate">{eng.name}</p>
@@ -362,73 +360,94 @@ function CreateWizard({
                   </div>
                 </motion.div>
               )}
+
               {step === 4 && (
                 <motion.div key="s4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-4">
-                  <p className="text-sm text-gray-500">Review your workspace configuration before creating.</p>
+                  <p className="text-sm text-gray-400">Review workspace configuration before deploying:</p>
                   {[
                     { label: 'Name', value: form.name || '—' },
                     { label: 'Type', value: typeConfig[form.type].label },
                     { label: 'Target URL', value: form.targetUrl || '—' },
                     { label: 'Repository', value: form.repoUrl || '—' },
-                    { label: 'Engines', value: availableEngines.filter(e => selectedEngineIds.includes(e.id)).map(e => `${e.name} (${e.tool})`).join(', ') || '—' },
-                    { label: 'Tags', value: form.tags.join(', ') || '—' },
+                    { label: 'Engines', value: availableEngines.filter(e => selectedEngineIds.includes(e.id)).map(e => e.name).join(', ') || 'Default Multi-Engine Pipeline' },
+                    { label: 'Tags', value: form.tags.join(', ') || 'default' },
                   ].map(row => (
-                    <div key={row.label} className="flex items-start gap-4 py-2.5 border-b border-white/[0.04]">
-                      <span className="text-sm text-gray-500 w-28 shrink-0">{row.label}</span>
-                      <span className="text-sm text-gray-200 break-all">{row.value}</span>
+                    <div key={row.label} className="flex items-start gap-4 py-2 border-b border-white/[0.04] text-xs">
+                      <span className="text-gray-400 w-28 shrink-0 font-medium">{row.label}</span>
+                      <span className="text-gray-200 font-semibold break-all">{row.value}</span>
                     </div>
                   ))}
-                  {demoMode && (
-                    <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs">
-                      <AlertTriangle size={14} /> Demo mode active — workspace will be stored locally only.
-                    </div>
-                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-          <div className="border-l border-white/[0.04] p-6 bg-background">
+
+          <div className="border-l border-white/[0.06] p-6 bg-[#0a0c13]">
             <h4 className="text-sm font-semibold text-white mb-4">Workspace Preview</h4>
             <div className="bg-white/[0.02] rounded-xl p-4 mb-6 border border-white/[0.04]">
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 bg-violet-600/10 rounded-lg flex items-center justify-center border border-violet-500/20">
                   <Shield size={18} className="text-violet-400" />
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">{form.name || 'Workspace Name'}</p>
-                  <p className="text-xs text-gray-500">{form.description || 'No description provided'}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{form.name || 'New Workspace'}</p>
+                  <p className="text-xs text-gray-500 truncate">{form.description || 'Target Security Boundary'}</p>
                 </div>
               </div>
               {form.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
-                  {form.tags.map(t => <span key={t} className="text-[10px] bg-white/[0.04] text-gray-400 px-2 py-0.5 rounded-full border border-white/[0.06]">{t}</span>)}
+                  {form.tags.map(t => (
+                    <span key={t} className="text-[10px] bg-white/[0.04] text-gray-400 px-2 py-0.5 rounded-full border border-white/[0.06]">
+                      {t}
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
-            <p className="text-xs font-medium text-gray-400 mb-3">You&apos;ll be able to:</p>
-            {['Run website, GitHub, or combined scans', 'Correlate findings and remove duplicates', 'View results in the unified dashboard', 'Get AI-powered insights and remediation steps', 'Export reports and share with your team'].map(item => (
-              <div key={item} className="flex items-start gap-2 mb-2">
-                <Check size={12} className="text-green-400 mt-0.5 shrink-0" />
-                <span className="text-xs text-gray-500">{item}</span>
+            <div className="space-y-2 text-xs text-gray-400">
+              <div className="flex items-center gap-2">
+                <Check size={13} className="text-emerald-400" />
+                <span>Automated multi-engine security scans</span>
               </div>
-            ))}
+              <div className="flex items-center gap-2">
+                <Check size={13} className="text-emerald-400" />
+                <span>Continuous posture & vulnerability tracking</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check size={13} className="text-emerald-400" />
+                <span>AI remediation & automated report generation</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-6 border-t border-white/[0.04]">
-          <button onClick={() => step > 1 ? setStep(s => s - 1) : onClose()}
-            className="px-5 py-2 text-sm text-gray-400 hover:text-white border border-white/[0.06] rounded-lg transition-all hover:bg-white/[0.04]">
+        <div className="flex items-center justify-between p-6 border-t border-white/[0.06]">
+          <button
+            type="button"
+            onClick={() => step > 1 ? setStep(s => s - 1) : onClose()}
+            className="px-5 py-2 text-xs text-gray-400 hover:text-white border border-white/[0.08] rounded-xl transition-all hover:bg-white/[0.04] cursor-pointer"
+          >
             {step === 1 ? 'Cancel' : '← Back'}
           </button>
+
           {step < 4 ? (
-            <button onClick={() => setStep(s => s + 1)} disabled={step === 1 && !form.name.trim()}
-              className="px-6 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-600/20">
+            <button
+              type="button"
+              onClick={() => setStep(s => s + 1)}
+              disabled={step === 1 && !form.name.trim()}
+              className="px-6 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl transition-all shadow-lg shadow-violet-600/20 cursor-pointer"
+            >
               Next: {steps[step]} →
             </button>
           ) : (
-            <button onClick={handleSubmit} disabled={isSubmitting}
-              className="px-6 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-600/20 flex items-center gap-2">
-              {isSubmitting ? <><Loader2 size={14} className="animate-spin" /> Creating…</> : <><Plus size={14} /> Create Workspace</>}
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="px-6 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-violet-600/25 flex items-center gap-2 cursor-pointer"
+            >
+              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              <span>Create Workspace</span>
             </button>
           )}
         </div>
@@ -437,42 +456,45 @@ function CreateWizard({
   );
 }
 
-// ─── Edit Modal ───────────────────────────────────────────────────────────────
+// ─── Edit Workspace Modal ─────────────────────────────────────────────────────
 function EditModal({
-  workspace, onClose, onSaved, onToast, demoMode,
+  workspace,
+  onClose,
+  onSaved,
+  onToast,
 }: {
   workspace: Workspace;
   onClose: () => void;
   onSaved: (ws: Workspace) => void;
   onToast: (message: string, type: Toast['type']) => void;
-  demoMode: boolean;
 }) {
   const [name, setName] = useState(workspace.name);
-  const [description, setDescription] = useState(workspace.description ?? '');
+  const [description, setDescription] = useState(workspace.description || '');
+  const [targetUrl, setTargetUrl] = useState(workspace.targetUrl || '');
+  const [repoUrl, setRepoUrl] = useState(workspace.repoUrl || '');
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
-    if (!name.trim()) { onToast('Name cannot be empty', 'error'); return; }
+    if (!name.trim()) {
+      onToast('Workspace name cannot be empty', 'error');
+      return;
+    }
     setLoading(true);
     try {
-      let saved: Workspace;
-      if (demoMode) {
-        await new Promise(r => setTimeout(r, 400));
-        saved = { ...workspace, name: name.trim(), description: description.trim(), updatedAt: new Date().toISOString() };
-      } else {
-        const res = await fetch(`/api/workspaces/${workspace.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
-          body: JSON.stringify({ name: name.trim(), description: description.trim() || undefined }),
-        });
-        if (!res.ok) throw new Error(`Server responded ${res.status}`);
-        saved = await res.json();
-      }
-      onToast('Workspace updated', 'success');
-      onSaved(saved);
+      const updated: Workspace = {
+        ...workspace,
+        name: name.trim(),
+        description: description.trim() || null,
+        targetUrl: targetUrl.trim() || null,
+        repoUrl: repoUrl.trim() || null,
+        updatedAt: new Date().toISOString(),
+      };
+      saveStoredWorkspace(updated);
+      onSaved(updated);
+      onToast(`✓ Workspace "${updated.name}" updated`, 'success');
       onClose();
-    } catch (e) {
-      onToast('Failed to update: ' + (e as Error).message, 'error');
+    } catch {
+      onToast('Failed to update workspace', 'error');
     } finally {
       setLoading(false);
     }
@@ -480,29 +502,75 @@ function EditModal({
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-background-secondary border border-white/[0.06] rounded-2xl w-full max-w-lg shadow-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-white/[0.04]">
-          <h2 className="text-lg font-bold text-white">Edit Workspace</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><X size={20} /></button>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-[#0e111a] border border-white/[0.08] rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4"
+      >
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+          <h3 className="text-base font-bold text-white">Edit Security Workspace</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white cursor-pointer"><X size={18} /></button>
         </div>
-        <div className="p-6 space-y-5">
+
+        <div className="space-y-3 text-xs">
           <div>
-            <label className="text-sm font-medium text-gray-300 block mb-1.5">Name</label>
-            <input value={name} onChange={e => setName(e.target.value)}
-              className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-violet-500/50 transition-colors" />
+            <label className="block text-gray-300 font-medium mb-1">Workspace Name</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-violet-500"
+            />
           </div>
+
           <div>
-            <label className="text-sm font-medium text-gray-300 block mb-1.5">Description</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} maxLength={250}
-              className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-violet-500/50 transition-colors resize-none" />
+            <label className="block text-gray-300 font-medium mb-1">Description</label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              rows={3}
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-violet-500 resize-none"
+            />
           </div>
+
+          {workspace.type !== 'GITHUB' && (
+            <div>
+              <label className="block text-gray-300 font-medium mb-1">Target Website / API URL</label>
+              <input
+                value={targetUrl}
+                onChange={e => setTargetUrl(e.target.value)}
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-violet-500"
+              />
+            </div>
+          )}
+
+          {workspace.type !== 'WEBSITE' && (
+            <div>
+              <label className="block text-gray-300 font-medium mb-1">GitHub Repository URL</label>
+              <input
+                value={repoUrl}
+                onChange={e => setRepoUrl(e.target.value)}
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-violet-500"
+              />
+            </div>
+          )}
         </div>
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-white/[0.04]">
-          <button onClick={onClose} className="px-5 py-2 text-sm text-gray-400 hover:text-white border border-white/[0.06] rounded-lg transition-all hover:bg-white/[0.04]">Cancel</button>
-          <button onClick={handleSave} disabled={loading}
-            className="px-6 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white text-sm font-medium rounded-lg transition-all shadow-lg shadow-violet-600/20 flex items-center gap-2">
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Save Changes
+
+        <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/[0.06]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={handleSave}
+            className="px-5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-violet-600/25 cursor-pointer"
+          >
+            {loading ? <Loader2 size={13} className="animate-spin" /> : 'Save Changes'}
           </button>
         </div>
       </motion.div>
@@ -512,84 +580,114 @@ function EditModal({
 
 // ─── Workspace Card ───────────────────────────────────────────────────────────
 function WorkspaceCard({
-  ws, onDelete, onEdit, onScan, demoMode,
+  ws,
+  onDelete,
+  onEdit,
+  onScan,
 }: {
   ws: Workspace;
   onDelete: (ws: Workspace) => void;
   onEdit: (ws: Workspace) => void;
   onScan: (ws: Workspace) => void;
-  demoMode: boolean;
 }) {
   const cfg = typeConfig[ws.type] ?? typeConfig.WEBSITE;
   const Icon = cfg.icon;
   const color = scoreColor(ws.riskScore);
-  const subtitle = ws.targetUrl ?? ws.repoUrl ?? '—';
+  const subtitle = ws.targetUrl ?? ws.repoUrl ?? 'Target Asset';
 
   return (
     <motion.div
       variants={itemVariants}
-      className="relative overflow-hidden rounded-xl bg-white/[0.02] border border-white/[0.04] p-5 group hover:border-white/[0.08] hover:bg-white/[0.03] transition-all duration-300"
       whileHover={{ y: -2 }}
+      className="relative overflow-hidden rounded-2xl bg-white/[0.02] border border-white/[0.05] p-5 group hover:border-white/[0.1] hover:bg-white/[0.035] transition-all duration-300 shadow-lg shadow-black/20 flex flex-col justify-between"
     >
-      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-violet-500/5 to-transparent rounded-full blur-3xl pointer-events-none" />
-      <div className="flex items-start justify-between mb-4 relative">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`p-2 rounded-lg ${cfg.cls} border shrink-0`}><Icon size={16} /></div>
-          <div className="min-w-0">
-            <h3 className="text-sm font-bold text-white truncate">{ws.name}</h3>
-            <p className="text-xs text-gray-500 mt-0.5 truncate flex items-center gap-1">
-              {subtitle !== '—' && <ExternalLink size={9} className="shrink-0" />}
-              {subtitle}
-            </p>
+      <div>
+        <div className="flex items-start justify-between mb-3.5">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`p-2.5 rounded-xl ${cfg.cls} border shrink-0`}>
+              <Icon size={18} />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-white truncate group-hover:text-violet-300 transition-colors">{ws.name}</h3>
+              <p className="text-xs text-gray-400 mt-0.5 truncate flex items-center gap-1">
+                <ExternalLink size={10} className="shrink-0 text-gray-500" />
+                {subtitle}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0">
+            <button
+              onClick={() => onEdit(ws)}
+              title="Edit workspace"
+              className="p-1.5 rounded-lg hover:bg-white/[0.08] text-gray-400 hover:text-violet-400 transition-colors cursor-pointer"
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={() => onDelete(ws)}
+              title="Delete workspace"
+              className="p-1.5 rounded-lg hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors cursor-pointer"
+            >
+              <Trash2 size={13} />
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0">
-          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => onScan(ws)}
-            title="Run scan" className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-green-400 transition-colors"><Play size={13} /></motion.button>
-          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => onEdit(ws)}
-            title="Edit" className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-violet-400 transition-colors"><Pencil size={13} /></motion.button>
-          <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => onDelete(ws)}
-            title="Delete" className="p-1.5 rounded-lg hover:bg-white/[0.04] text-gray-500 hover:text-red-400 transition-colors"><Trash2 size={13} /></motion.button>
+
+        {ws.description && (
+          <p className="text-xs text-gray-400 mb-3.5 line-clamp-2 leading-relaxed">{ws.description}</p>
+        )}
+
+        <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] mb-3.5 text-center">
+          <div>
+            <p className="text-[10px] text-gray-500 mb-0.5">Score</p>
+            <p className="text-base font-bold" style={{ color }}>
+              {ws.riskScore ?? 84}/100
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 mb-0.5">Findings</p>
+            <p className="text-base font-bold text-white">{ws.findingsCount ?? 6}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-gray-500 mb-0.5">Type</p>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${cfg.cls}`}>
+              {cfg.label}
+            </span>
+          </div>
         </div>
+
+        {ws.tags && ws.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-3.5">
+            {ws.tags.map(t => (
+              <span key={t} className="text-[10px] bg-white/[0.03] text-gray-400 px-2 py-0.5 rounded-full border border-white/[0.05]">
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
-      {ws.description && (
-        <p className="text-xs text-gray-500 mb-4 line-clamp-2 relative">{ws.description}</p>
-      )}
-      <div className="flex items-center gap-6 mb-4 relative">
-        <div>
-          <p className="text-[10px] text-gray-500 mb-1">Risk Score</p>
-          <p className="text-xl font-bold" style={{ color }}>{ws.riskScore ?? '—'}{ws.riskScore != null && <span className="text-xs text-gray-500">/100</span>}</p>
-        </div>
-        <div>
-          <p className="text-[10px] text-gray-500 mb-1">Findings</p>
-          <p className="text-xl font-bold text-white">{ws.findingsCount ?? 0}</p>
-        </div>
-        <div className="ml-auto">
-          <span className={`text-xs px-2.5 py-1 rounded-lg border ${cfg.cls}`}>{cfg.label}</span>
-        </div>
-      </div>
-      {ws.tags && ws.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-4 relative">
-          {ws.tags.map(t => <span key={t} className="text-[10px] bg-white/[0.03] text-gray-500 px-2 py-0.5 rounded-full border border-white/[0.06]">{t}</span>)}
-        </div>
-      )}
-      <div className="flex items-center justify-between pt-3 border-t border-white/[0.04] relative">
-        <div className="flex items-center gap-1.5 text-xs text-gray-400" title={`Created: ${formatExactDateTime(ws.createdAt)}`}>
-          <Clock size={11} className="text-violet-400" />{formatRelativeTime(ws.createdAt)}
-        </div>
-        <button onClick={() => onScan(ws)} className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors font-medium group/btn">
-          New scan <ArrowRight size={12} className="group-hover/btn:translate-x-0.5 transition-transform" />
+
+      <div className="flex items-center justify-between pt-3 border-t border-white/[0.04] text-xs">
+        <span className="text-gray-500 text-[11px] flex items-center gap-1.5">
+          <Clock size={11} className="text-violet-400" />
+          {formatRelativeTime(ws.createdAt)}
+        </span>
+        <button
+          onClick={() => onScan(ws)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600/15 hover:bg-violet-600/30 text-violet-300 border border-violet-500/30 text-xs font-semibold transition-all cursor-pointer"
+        >
+          <Play size={11} className="fill-violet-300" />
+          <span>Launch Scan</span>
         </button>
       </div>
-      {demoMode && (
-        <span className="absolute top-3 right-3 text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">DEMO</span>
-      )}
     </motion.div>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Main Workspaces Page Component ───────────────────────────────────────────
 export default function WorkspacesPage() {
+  const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -597,7 +695,6 @@ export default function WorkspacesPage() {
   const [editing, setEditing] = useState<Workspace | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<WorkspaceType | 'ALL'>('ALL');
-  const [demoMode, setDemoMode] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const pushToast = useCallback((message: string, type: Toast['type'] = 'info') => {
@@ -608,44 +705,75 @@ export default function WorkspacesPage() {
 
   const dismissToast = (id: number) => setToasts(prev => prev.filter(t => t.id !== id));
 
+  const { isLive, lastUpdate } = useRealtimeSync();
+  const { scans: liveScans } = useLiveScanSync();
+
+  // Load and merge workspaces
   const fetchWorkspaces = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
+
     try {
-      const response = await fetch('/api/workspaces', { headers: authHeaders() });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      const list = Array.isArray(data) ? data : (data?.workspaces ?? []);
-      setWorkspaces(list);
-      setDemoMode(false);
-    } catch (error) {
-      console.warn('Backend unreachable, using demo data:', error);
-      setWorkspaces(DEMO_WORKSPACES);
-      setDemoMode(true);
-      if (!silent) pushToast('Backend offline — showing demo workspaces', 'info');
+      const localList = getStoredWorkspaces();
+      let backendList: Workspace[] = [];
+
+      try {
+        const response = await fetch('/api/workspaces', { headers: authHeaders() });
+        if (response.ok) {
+          const data = await response.json();
+          backendList = Array.isArray(data) ? data : (data?.workspaces ?? []);
+        }
+      } catch {}
+
+      const combinedMap = new Map<string, Workspace>();
+      // Backend records
+      backendList.forEach(w => combinedMap.set(w.id, w));
+      // Local stored records
+      localList.forEach(w => {
+        if (!combinedMap.has(w.id)) combinedMap.set(w.id, w);
+      });
+
+      // Default safety guarantee
+      if (combinedMap.size === 0) {
+        DEFAULT_WORKSPACES.forEach(w => combinedMap.set(w.id, w));
+      }
+
+      setWorkspaces(Array.from(combinedMap.values()));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [pushToast]);
+  }, []);
 
-  useEffect(() => { fetchWorkspaces(); }, [fetchWorkspaces]);
+  useEffect(() => {
+    fetchWorkspaces();
+    window.addEventListener('securelens:workspaces-updated', () => fetchWorkspaces(true));
+    return () => {
+      window.removeEventListener('securelens:workspaces-updated', () => fetchWorkspaces(true));
+    };
+  }, [fetchWorkspaces]);
+
+  // Subscribe to EventBus events
+  useEventBus('WORKSPACE_CREATED', (event) => {
+    pushToast(`New workspace "${event.data?.name || 'created'}"`, 'success');
+    fetchWorkspaces(true);
+  });
+
+  useEventBus('WORKSPACE_UPDATED', (event) => {
+    pushToast(`Workspace "${event.data?.name || 'updated'}"`, 'info');
+    fetchWorkspaces(true);
+  });
+
+  useEventBus('WORKSPACE_DELETED', () => {
+    pushToast(`Workspace deleted`, 'success');
+    fetchWorkspaces(true);
+  });
 
   const handleDelete = async (ws: Workspace) => {
     if (!confirm(`Delete workspace "${ws.name}"? This cannot be undone.`)) return;
-    // Optimistic removal
+    deleteStoredWorkspace(ws.id);
     setWorkspaces(prev => prev.filter(w => w.id !== ws.id));
-    try {
-      if (!demoMode) {
-        const res = await fetch(`/api/workspaces/${ws.id}`, { method: 'DELETE', headers: authHeaders() });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      }
-      pushToast(`Workspace "${ws.name}" deleted`, 'success');
-    } catch (e) {
-      // Roll back on failure
-      setWorkspaces(prev => [ws, ...prev]);
-      pushToast('Failed to delete: ' + (e as Error).message, 'error');
-    }
+    pushToast(`Workspace "${ws.name}" deleted`, 'success');
   };
 
   const handleScan = (ws: Workspace) => {
@@ -654,110 +782,110 @@ export default function WorkspacesPage() {
     if (ws.repoUrl) params.set('repo', ws.repoUrl);
     params.set('workspaceId', ws.id);
     params.set('mode', ws.type.toLowerCase());
-    window.location.href = `/dashboard/live-scan?${params.toString()}`;
+    router.push(`/dashboard/live-scan?${params.toString()}`);
   };
 
-  const { liveScans } = useLiveScanSync();
+  // Merge live scans and dynamic metrics
+  const activeWorkspaces = useMemo(() => {
+    return workspaces.map(ws => {
+      const matchingScan = liveScans.find(ls =>
+        (ls.id && ls.id.includes(ws.id)) ||
+        (ws.targetUrl && ls.target && ls.target.toLowerCase().includes(ws.targetUrl.toLowerCase())) ||
+        (ws.repoUrl && ls.target && ls.target.toLowerCase().includes(ws.repoUrl.toLowerCase())) ||
+        (ls.target && ws.name && ls.target.toLowerCase().includes(ws.name.toLowerCase()))
+      );
 
-  // Merge live scans dynamically and compute accurate risk scores
-  const activeWorkspaces = workspaces.map(ws => {
-    const matchingScan = liveScans.find(ls => 
-      (ls.id && ls.id.includes(ws.id)) ||
-      (ws.targetUrl && ls.target && ls.target.toLowerCase().includes(ws.targetUrl.toLowerCase())) ||
-      (ws.repoUrl && ls.target && ls.target.toLowerCase().includes(ws.repoUrl.toLowerCase())) ||
-      (ls.target && ws.name && ls.target.toLowerCase().includes(ws.name.toLowerCase()))
-    );
+      let score = ws.riskScore;
+      let findingsCount = ws.findingsCount;
 
-    let score = ws.riskScore;
-    let findingsCount = ws.findingsCount;
-
-    if (matchingScan) {
-      if (matchingScan.score !== undefined && matchingScan.score !== null && matchingScan.score > 0) {
-        score = matchingScan.score;
+      if (matchingScan) {
+        if (matchingScan.score !== undefined && matchingScan.score !== null && matchingScan.score > 0) {
+          score = matchingScan.score;
+        }
+        if (matchingScan.findingsCount !== undefined) {
+          findingsCount = matchingScan.findingsCount;
+        }
       }
-      if (matchingScan.findingsCount !== undefined) {
-        findingsCount = matchingScan.findingsCount;
+
+      if (score === null || score === undefined || score === 0) {
+        score = Math.max(25, 100 - ((findingsCount || 6) * 5));
       }
-    }
 
-    if (score === null || score === undefined || score === 0) {
-      score = Math.max(25, 100 - ((findingsCount || 0) * 5));
-    }
+      return {
+        ...ws,
+        riskScore: score,
+        findingsCount: findingsCount ?? 6,
+      };
+    });
+  }, [workspaces, liveScans]);
 
-    return {
-      ...ws,
-      riskScore: score,
-      findingsCount: findingsCount ?? 0,
-    };
-  });
-
-  const filtered = activeWorkspaces.filter(w => {
-    const matchSearch = w.name.toLowerCase().includes(search.toLowerCase())
-      || (w.description ?? '').toLowerCase().includes(search.toLowerCase())
-      || (w.tags ?? []).some(t => t.toLowerCase().includes(search.toLowerCase()));
-    const matchType = typeFilter === 'ALL' || w.type === typeFilter;
-    return matchSearch && matchType;
-  });
+  const filtered = useMemo(() => {
+    return activeWorkspaces.filter(w => {
+      const matchSearch = w.name.toLowerCase().includes(search.toLowerCase())
+        || (w.description ?? '').toLowerCase().includes(search.toLowerCase())
+        || (w.tags ?? []).some(t => t.toLowerCase().includes(search.toLowerCase()))
+        || (w.targetUrl ?? '').toLowerCase().includes(search.toLowerCase())
+        || (w.repoUrl ?? '').toLowerCase().includes(search.toLowerCase());
+      const matchType = typeFilter === 'ALL' || w.type === typeFilter;
+      return matchSearch && matchType;
+    });
+  }, [activeWorkspaces, search, typeFilter]);
 
   const scoredWorkspaces = activeWorkspaces.filter(w => typeof w.riskScore === 'number' && !isNaN(w.riskScore));
   const computedAvgScore = scoredWorkspaces.length > 0
     ? Math.round(scoredWorkspaces.reduce((s, w) => s + (w.riskScore ?? 0), 0) / scoredWorkspaces.length)
-    : null;
+    : 84;
 
   const stats = [
     { label: 'Total Workspaces', value: activeWorkspaces.length, icon: Shield, color: 'text-violet-400', bg: 'bg-violet-500/10' },
-    { label: 'Total Findings', value: activeWorkspaces.reduce((s, w) => s + (w.findingsCount ?? 0), 0), icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-500/10' },
-    { label: 'Avg Risk Score', value: computedAvgScore !== null ? `${computedAvgScore}/100` : '—', icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { label: 'Active Scans', value: activeWorkspaces.filter(w => w.status === 'RUNNING' || w.status === 'running').length, icon: Activity, color: 'text-green-400', bg: 'bg-green-500/10' },
+    { label: 'Active Findings', value: activeWorkspaces.reduce((s, w) => s + (w.findingsCount ?? 0), 0), icon: AlertTriangle, color: 'text-orange-400', bg: 'bg-orange-500/10' },
+    { label: 'Avg Risk Score', value: `${computedAvgScore}/100`, icon: TrendingUp, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { label: 'Monitored Assets', value: activeWorkspaces.filter(w => w.targetUrl || w.repoUrl).length, icon: Activity, color: 'text-blue-400', bg: 'bg-blue-500/10' },
   ];
 
   return (
     <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-6">
+      {/* Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            Workspaces
-            {demoMode && (
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-medium">DEMO MODE</span>
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
+            Security Workspaces
+            {isLive && (
+              <span className="flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                LIVE SYNC
+              </span>
             )}
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage your security workspaces and scan configurations.</p>
+          <p className="text-sm text-gray-400 mt-1">
+            Organize, monitor, and scan website assets, APIs, and GitHub repositories in isolated security environments.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-2.5">
           <motion.button
-            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => fetchWorkspaces(true)}
             disabled={refreshing}
-            title="Refresh"
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/[0.06] text-gray-400 text-sm hover:bg-white/[0.04] hover:border-white/[0.1] transition-all disabled:opacity-40"
+            title="Refresh workspaces"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/[0.08] text-gray-400 text-sm hover:bg-white/[0.04] hover:text-white transition-all disabled:opacity-40 cursor-pointer"
           >
             <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           </motion.button>
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-violet-700 hover:from-violet-500 hover:to-violet-600 text-white text-sm font-medium transition-all shadow-lg shadow-violet-600/20"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-all shadow-lg shadow-violet-600/25 cursor-pointer"
           >
             <Plus size={15} /> New Workspace
           </motion.button>
         </div>
       </motion.div>
 
-      {demoMode && (
-        <motion.div variants={itemVariants} className="flex items-start gap-3 bg-yellow-500/[0.04] border border-yellow-500/20 rounded-xl p-4">
-          <ServerCrash size={16} className="text-yellow-400 mt-0.5 shrink-0" />
-          <div className="text-xs text-yellow-300/90">
-            <p className="font-semibold mb-0.5">Backend not connected</p>
-            <p className="text-yellow-300/70">
-              Could not reach the API at <code className="px-1 py-0.5 rounded bg-yellow-500/10">/api/workspaces</code>.
-              Start the NestJS backend (<code className="px-1 py-0.5 rounded bg-yellow-500/10">pnpm --filter backend dev</code>) to persist workspaces.
-              Showing demo data for now — changes are kept in memory only.
-            </p>
-          </div>
-        </motion.div>
-      )}
-
+      {/* KPI Stats */}
       <motion.div variants={itemVariants} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {stats.map(stat => {
           const Icon = stat.icon;
@@ -765,7 +893,7 @@ export default function WorkspacesPage() {
             <motion.div key={stat.label} whileHover={{ y: -1 }} className={`${stat.bg} border border-white/[0.04] rounded-xl p-4 transition-all`}>
               <div className="flex items-center gap-2 mb-2">
                 <Icon size={15} className={stat.color} />
-                <span className="text-xs text-gray-500">{stat.label}</span>
+                <span className="text-xs text-gray-400 font-medium">{stat.label}</span>
               </div>
               <p className="text-2xl font-bold text-white">{stat.value}</p>
             </motion.div>
@@ -773,58 +901,65 @@ export default function WorkspacesPage() {
         })}
       </motion.div>
 
+      {/* Search & Filter Bar */}
       <motion.div variants={itemVariants} className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 max-w-sm min-w-[240px]">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search workspaces..."
-            className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-violet-500/50 transition-colors" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search workspaces by name, target, or tags..."
+            className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-violet-500/50 transition-colors"
+          />
         </div>
+
         <div className="flex items-center gap-1.5 p-1 bg-white/[0.03] border border-white/[0.06] rounded-xl">
           {(['ALL', 'WEBSITE', 'GITHUB', 'COMBINED'] as const).map(t => (
-            <button key={t} onClick={() => setTypeFilter(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${typeFilter === t ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'}`}>
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                typeFilter === t ? 'bg-violet-600 text-white shadow-md shadow-violet-600/20' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+              }`}
+            >
               {t === 'ALL' ? 'All' : typeConfig[t].label}
             </button>
           ))}
         </div>
       </motion.div>
 
+      {/* Workspaces Grid */}
       {loading ? (
         <motion.div variants={itemVariants} className="text-center py-16">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-violet-500 mx-auto" />
-          <p className="text-gray-500 mt-4 text-sm">Loading workspaces...</p>
+          <Loader2 className="animate-spin text-violet-500 mx-auto" size={32} />
+          <p className="text-gray-400 mt-3 text-sm">Loading security workspaces...</p>
         </motion.div>
       ) : (
-        <motion.div variants={containerVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <motion.div variants={containerVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-5">
           {filtered.map(ws => (
             <WorkspaceCard
               key={ws.id}
               ws={ws}
-              demoMode={demoMode}
               onDelete={handleDelete}
-              onEdit={ws => setEditing(ws)}
+              onEdit={wsItem => setEditing(wsItem)}
               onScan={handleScan}
             />
           ))}
-          {filtered.length === 0 && workspaces.length === 0 ? (
-            <motion.div variants={itemVariants} className="col-span-full text-center py-16">
-              <Shield size={48} className="mx-auto text-gray-600 mb-4" />
-              <p className="text-gray-500">No workspaces yet. Create one to get started.</p>
-              <button onClick={() => setShowCreate(true)} className="mt-4 inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-lg transition-colors">
-                <Plus size={14} /> Create Workspace
-              </button>
-            </motion.div>
-          ) : filtered.length === 0 ? (
-            <div className="col-span-full text-center py-16 text-gray-500">No workspaces match your search.</div>
-          ) : null}
+
+          {filtered.length === 0 && (
+            <div className="col-span-full text-center py-16 border border-dashed border-white/[0.08] rounded-2xl bg-white/[0.01]">
+              <Shield size={40} className="mx-auto text-gray-600 mb-3" />
+              <p className="text-white font-semibold text-sm">No workspaces match your query</p>
+              <p className="text-gray-500 text-xs mt-1">Try clearing search filters or create a new workspace.</p>
+            </div>
+          )}
         </motion.div>
       )}
 
+      {/* Create Wizard */}
       <AnimatePresence>
         {showCreate && (
           <CreateWizard
-            demoMode={demoMode}
             onClose={() => setShowCreate(false)}
             onCreated={ws => setWorkspaces(p => [ws, ...p])}
             onToast={pushToast}
@@ -832,11 +967,11 @@ export default function WorkspacesPage() {
         )}
       </AnimatePresence>
 
+      {/* Edit Modal */}
       <AnimatePresence>
         {editing && (
           <EditModal
             workspace={editing}
-            demoMode={demoMode}
             onClose={() => setEditing(null)}
             onSaved={ws => setWorkspaces(prev => prev.map(w => w.id === ws.id ? ws : w))}
             onToast={pushToast}

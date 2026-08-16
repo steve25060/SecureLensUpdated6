@@ -4,12 +4,12 @@ import {
   LayoutDashboard,
   ShieldCheck,
   Globe,
-  Terminal, // Replaced Github with Terminal
   FileText,
   BarChart3,
   Settings,
   Sparkles,
 } from "lucide-react";
+import { Github } from "@/components/common/GithubIcon";
 
 const menu = [
   {
@@ -23,7 +23,7 @@ const menu = [
   },
   {
     title: "GitHub Scan",
-    icon: Terminal, // Replaced Github with Terminal
+    icon: Github,
   },
   {
     title: "Findings",

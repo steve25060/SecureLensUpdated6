@@ -2,7 +2,8 @@
 
 import { motion } from "framer-motion";
 import Logo from "./Logo";
-import { Shield, CheckCircle2, ArrowRight, GitBranch, Globe, Share2 } from "lucide-react";
+import { Shield, CheckCircle2, ArrowRight, Globe, Share2 } from "lucide-react";
+import { Github } from "@/components/common/GithubIcon";
 import Link from "next/link";
 
 export default function Footer() {
@@ -89,7 +90,7 @@ export default function Footer() {
           <div className="flex items-center space-x-4">
             <a href="https://github.com" target="_blank" rel="noreferrer" className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all">
               <span className="sr-only">GitHub</span>
-              <GitBranch className="h-4 w-4" />
+              <Github className="h-4 w-4" />
             </a>
             <a href="https://twitter.com" target="_blank" rel="noreferrer" className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all">
               <span className="sr-only">Twitter</span>

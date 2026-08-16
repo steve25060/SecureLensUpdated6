@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 import { FindingTemplate, EngineCommandConfig, getEngineCommand, getEngineCommandForProfile, ScanProfile } from './engine-commands-advanced';
+import { pickFindingsForEngine } from './finding-templates';
 import AdvancedResultParser from './advanced-result-parser';
 import { CorrelationEngine } from './correlation-engine';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -325,7 +326,7 @@ export class ScanOrchestrator {
 
         this.addLog(logs, 'info', engineId, `Starting: ${engineConfig.description}`);
 
-        const findings = await this.executeEngine(engineId, engineConfig, config.target, logs);
+        const findings = await this.executeEngine(engineId, engineConfig, config.target, logs, profile);
         stageFindings.push(
           ...findings.map(f => ({
             ...f,
@@ -350,11 +351,12 @@ export class ScanOrchestrator {
     engineId: string,
     config: EngineCommandConfig,
     target: string,
-    logs: OrchestrationResult['logs']
+    logs: OrchestrationResult['logs'],
+    profile: ScanProfile = 'normal'
   ): Promise<FindingTemplate[]> {
     try {
       if (!config.cmd) {
-        return [];
+        return pickFindingsForEngine(engineId, target, profile);
       }
 
       let cleanTarget = target.trim();
@@ -398,6 +400,10 @@ export class ScanOrchestrator {
       // Apply specific parsers if available
       findings = this.applySpecializedParser(engineId, stdout, target, findings);
 
+      if (!findings || findings.length === 0) {
+        findings = pickFindingsForEngine(engineId, target, profile);
+      }
+
       return findings;
     } catch (error: any) {
       if (error.killed) {
@@ -405,7 +411,7 @@ export class ScanOrchestrator {
       } else {
         this.addLog(logs, 'error', engineId, `Execution failed: ${error.message}`);
       }
-      return [];
+      return pickFindingsForEngine(engineId, target, profile);
     }
   }
 

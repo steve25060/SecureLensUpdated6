@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, HelpCircle, ChevronDown, LogOut, User, Settings, Moon, Sun, CheckCircle, AlertTriangle, Info, X, Clock, Radio } from 'lucide-react';
+import { Search, Bell, HelpCircle, ChevronDown, LogOut, User, Settings, Moon, Sun, CheckCircle, AlertTriangle, Info, X, Clock, Radio, Palette } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useLiveClock } from '@/lib/time-utils';
+import { getStoredThemeConfig, THEME_PRESETS } from '@/lib/theme-manager';
 
 interface User {
   name?: string;
@@ -114,7 +116,41 @@ const Header: React.FC = () => {
     router.push('/login');
   };
 
-  const unreadCount = NOTIFICATIONS.filter(n => !n.read).length;
+  const [readNotifIds, setReadNotifIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    try {
+      const storedRead: number[] = JSON.parse(localStorage.getItem('sl_header_read_notifications') || '[]');
+      setReadNotifIds(storedRead);
+    } catch {}
+  }, []);
+
+  const handleMarkAllRead = () => {
+    const allIds = NOTIFICATIONS.map(n => n.id);
+    setReadNotifIds(allIds);
+    localStorage.setItem('sl_header_read_notifications', JSON.stringify(allIds));
+  };
+
+  const handleNotifClick = (id: number) => {
+    if (!readNotifIds.includes(id)) {
+      const updated = [...readNotifIds, id];
+      setReadNotifIds(updated);
+      localStorage.setItem('sl_header_read_notifications', JSON.stringify(updated));
+    }
+    setNotifOpen(false);
+    router.push('/dashboard/notifications');
+  };
+
+  const handleSearchSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      const q = (e.target as HTMLInputElement).value.trim();
+      if (q) {
+        router.push(`/dashboard/findings?search=${encodeURIComponent(q)}`);
+      }
+    }
+  };
+
+  const unreadCount = NOTIFICATIONS.filter(n => !n.read && !readNotifIds.includes(n.id)).length;
 
   const typeIcon = (type: string) => {
     switch (type) {
@@ -160,20 +196,21 @@ const Header: React.FC = () => {
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search..."
+            placeholder="Search findings, assets... (Enter)"
+            onKeyDown={handleSearchSubmit}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
             className="w-full rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-gray-300 placeholder-gray-500 pl-9 pr-4 py-2 outline-none focus:border-violet-500/50 focus:bg-white/[0.06] transition-all duration-200"
             aria-label="Global search"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-gray-600 pointer-events-none">
-            <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] font-mono">⌘K</kbd>
+            <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] font-mono">↵</kbd>
           </div>
         </motion.div>
 
         <div className="relative" ref={notifRef}>
           <motion.button
-            className="relative p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.04] transition-colors"
+            className="relative p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.04] transition-colors cursor-pointer"
             onClick={() => setNotifOpen(v => !v)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -202,34 +239,56 @@ const Header: React.FC = () => {
               >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04]">
                   <h3 className="text-sm font-semibold text-white">Notifications</h3>
-                  <span className="text-[11px] text-violet-400 hover:text-violet-300 cursor-pointer transition-colors">Mark all read</span>
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={handleMarkAllRead}
+                      className="text-[11px] text-violet-400 hover:text-violet-300 cursor-pointer transition-colors bg-transparent border-0"
+                    >
+                      Mark all read
+                    </button>
+                  )}
                 </div>
                 <div className="max-h-72 overflow-y-auto">
-                  {NOTIFICATIONS.map((notif) => (
-                    <div
-                      key={notif.id}
-                      className={`flex items-start gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer ${!notif.read ? 'bg-violet-600/[0.03]' : ''}`}
-                    >
-                      <div className="mt-0.5">{typeIcon(notif.type)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium ${!notif.read ? 'text-white' : 'text-gray-400'}`}>{notif.title}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">{notif.message}</p>
+                  {NOTIFICATIONS.map((notif) => {
+                    const isRead = notif.read || readNotifIds.includes(notif.id);
+                    return (
+                      <div
+                        key={notif.id}
+                        onClick={() => handleNotifClick(notif.id)}
+                        className={`flex items-start gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors cursor-pointer ${!isRead ? 'bg-violet-600/[0.05]' : 'opacity-70'}`}
+                      >
+                        <div className="mt-0.5">{typeIcon(notif.type)}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-medium ${!isRead ? 'text-white font-semibold' : 'text-gray-400'}`}>{notif.title}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5 truncate">{notif.message}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="text-[10px] text-gray-600">{notif.time}</span>
+                          {!isRead && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-[10px] text-gray-600">{notif.time}</span>
-                        {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="px-4 py-2.5 border-t border-white/[0.04] text-center">
                   <button onClick={() => { setNotifOpen(false); router.push('/dashboard/notifications'); }}
-                    className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">View all notifications</button>
+                    className="text-[11px] text-gray-400 hover:text-gray-200 transition-colors cursor-pointer">View all notifications</button>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        <motion.button
+          onClick={() => router.push('/dashboard/settings?tab=appearance')}
+          className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.04] transition-colors flex items-center gap-1.5 cursor-pointer group"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          title="Cyber Defense Theme Customizer"
+          aria-label="Theme Customizer"
+        >
+          <Palette size={18} className="group-hover:text-violet-400 transition-colors" />
+        </motion.button>
 
         <motion.button
           className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/[0.04] transition-colors"
@@ -287,15 +346,16 @@ const Header: React.FC = () => {
                   { label: 'Profile', href: '/dashboard/settings', icon: User },
                   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
                 ].map((item) => (
-                  <a
+                  <Link
                     key={item.label}
                     href={item.href}
+                    onClick={() => setDropdownOpen(false)}
                     className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-400 hover:text-white hover:bg-white/[0.04] transition-colors"
                     role="menuitem"
                   >
                     <item.icon size={14} />
                     {item.label}
-                  </a>
+                  </Link>
                 ))}
                 <div className="border-t border-white/[0.04] mt-1 pt-1">
                   <button

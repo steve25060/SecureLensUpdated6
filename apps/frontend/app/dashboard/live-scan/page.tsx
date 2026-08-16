@@ -8,11 +8,14 @@ import {
   AlertCircle, Loader2, Check, Play, Globe, ArrowRight, Shield, Activity,
   Target, X, Terminal, StopCircle, ChevronDown, RefreshCw, Cpu,
   CircleDot, FileWarning, Sparkles, Database, Layers, ServerCrash,
-  Info, Clock, UploadCloud, FileCode, Code2, FileText, Trash2,
+  Info, Clock, UploadCloud, FileCode, Code2, FileText, Trash2, Radio,
 } from 'lucide-react';
 import { enginesForMode, engineById, RESOURCE_META, type EngineDef, type ScanMode } from '@/lib/engines';
 import { EngineIcon } from '@/components/dashboard/EngineIcon';
 import { saveLiveScanRun, getActiveScanSession, setActiveScanSession, type ActiveScanSession } from '@/lib/live-scan-store';
+import { useEventBus, EventBus } from '@/lib/event-bus';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+import { Github } from '@/components/common/GithubIcon';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ScanStatusValue = 'idle' | 'queued' | 'running' | 'processing' | 'completed' | 'failed' | 'cancelled';
@@ -411,6 +414,11 @@ function LiveScanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // 🔥 REAL-TIME SYNC INTEGRATION
+  const { isLive, lastUpdate, eventCount, recentEvents } = useRealtimeSync();
+  const [realtimeFindingsCount, setRealtimeFindingsCount] = useState(0);
+  const [isBroadcasting, setIsBroadcasting] = useState(false);
+
   const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([]);
   const [demoMode, setDemoMode] = useState(false);
 
@@ -442,6 +450,102 @@ function LiveScanContent() {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const demoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 🔥 REAL-TIME EVENT BUS SUBSCRIPTIONS
+  // Subscribe to SCAN_STARTED events
+  useEventBus('SCAN_STARTED', (payload) => {
+    const { scanId: eventScanId, target, mode: scanMode } = payload.data;
+    log(`[EventBus] Received SCAN_STARTED event: ${target}`, 'success', 'EventBus');
+    setIsBroadcasting(true);
+    
+    // If this is a different scan, update our state
+    if (eventScanId && eventScanId !== scanId) {
+      setScanId(eventScanId);
+      setScanStatus('running');
+      setScanProgress(0);
+      setRealtimeFindingsCount(0);
+    }
+  }, [scanId]);
+
+  // Subscribe to SCAN_PROGRESS events for real-time progress updates
+  useEventBus('SCAN_PROGRESS', (payload) => {
+    const { scanId: eventScanId, progress, status, findingsCount } = payload.data;
+    
+    // Only update if it's our scan or we don't have a scan yet
+    if (!scanId || eventScanId === scanId) {
+      if (typeof progress === 'number') {
+        setScanProgress(progress);
+        log(`[EventBus] Progress update: ${progress}%`, 'info', 'EventBus');
+      }
+      if (status) {
+        setScanStatus(status);
+      }
+      if (typeof findingsCount === 'number') {
+        setRealtimeFindingsCount(findingsCount);
+      }
+      setIsBroadcasting(true);
+    }
+  }, [scanId]);
+
+  // Subscribe to SCAN_COMPLETED events
+  useEventBus('SCAN_COMPLETED', (payload) => {
+    const { scanId: eventScanId, findings: eventFindings, score } = payload.data;
+    log(`[EventBus] Scan completed: ${eventScanId}`, 'success', 'EventBus');
+    
+    if (eventScanId === scanId || !scanId) {
+      setScanStatus('completed');
+      setScanProgress(100);
+      setIsBroadcasting(false);
+      
+      if (eventFindings && Array.isArray(eventFindings)) {
+        setFindings(eventFindings.slice(0, 20).map((f: any): FindingPreview => ({
+          id: f.id,
+          severity: ((f.severity ?? 'INFO').toUpperCase() as FindingPreview['severity']),
+          title: f.title ?? 'Untitled finding',
+          source: f.source ?? 'scanner',
+        })));
+        setRealtimeFindingsCount(eventFindings.length);
+      }
+      
+      pushToast(`Scan completed — ${eventFindings?.length || 0} findings synced!`, 'success');
+    }
+  }, [scanId]);
+
+  // Subscribe to SCAN_FAILED events
+  useEventBus('SCAN_FAILED', (payload) => {
+    const { scanId: eventScanId, error: errorMsg } = payload.data;
+    
+    if (eventScanId === scanId) {
+      setScanStatus('failed');
+      setIsBroadcasting(false);
+      log(`[EventBus] Scan failed: ${errorMsg || 'Unknown error'}`, 'error', 'EventBus');
+      pushToast('Scan failed', 'error');
+    }
+  }, [scanId]);
+
+  // Subscribe to FINDING_ADDED events for real-time finding updates
+  useEventBus('FINDING_ADDED', (payload) => {
+    const { scanId: eventScanId, finding } = payload.data;
+    
+    if (eventScanId === scanId && finding) {
+      setFindings(prev => {
+        // Avoid duplicates
+        if (prev.some(f => f.id === finding.id)) return prev;
+        
+        const newFinding: FindingPreview = {
+          id: finding.id,
+          severity: ((finding.severity ?? 'INFO').toUpperCase() as FindingPreview['severity']),
+          title: finding.title ?? 'Untitled finding',
+          source: finding.source ?? 'scanner',
+        };
+        
+        setRealtimeFindingsCount(prev => prev + 1);
+        log(`[EventBus] New finding: ${finding.title}`, 'warn', 'EventBus');
+        
+        return [newFinding, ...prev].slice(0, 20);
+      });
+    }
+  }, [scanId]);
 
   // Live Elapsed Scan Timer
   useEffect(() => {
@@ -530,6 +634,14 @@ function LiveScanContent() {
         setScanStatus(currentSt);
         setScanProgress(currentProg);
 
+        // 🔥 Broadcast SCAN_PROGRESS event
+        EventBus.publish('SCAN_PROGRESS', {
+          scanId: id,
+          progress: currentProg,
+          status: currentSt,
+          findingsCount: st.findingsCount || 0,
+        }, 'live-scan-page');
+
         setActiveScanSession({
           scanId: id,
           target: currentTarget,
@@ -545,6 +657,7 @@ function LiveScanContent() {
         if (currentSt === 'completed') {
           if (pollRef.current) clearInterval(pollRef.current);
           setIsExecuting(false);
+          setIsBroadcasting(false);
           log('Scan completed successfully.', 'success');
           let fetchedList: any[] = [];
           try {
@@ -559,6 +672,7 @@ function LiveScanContent() {
                   title: f.title ?? 'Untitled finding',
                   source: f.source ?? 'scanner',
                 })));
+                setRealtimeFindingsCount(fetchedList.length);
               }
             }
           } catch { /* ignore findings fetch errors */ }
@@ -599,12 +713,35 @@ function LiveScanContent() {
             score: scanScore,
           });
 
+          // 🔥 Broadcast SCAN_COMPLETED, DATA_REFRESHED & REPORT_GENERATED events
+          EventBus.publish('SCAN_COMPLETED', {
+            scanId: id,
+            target: currentTarget,
+            type: currentMode.toUpperCase(),
+            mode: currentMode,
+            findings: fetchedList,
+            score: scanScore,
+            findingsCount: fetchedList.length,
+            timestamp: new Date().toISOString(),
+          }, 'live-scan-page');
+
+          EventBus.publish('DATA_REFRESHED', { timestamp: new Date().toISOString() }, 'live-scan-page');
+          EventBus.publish('REPORT_GENERATED', { scanId: id, target: currentTarget, findingsCount: fetchedList.length }, 'live-scan-page');
+
           pushToast('Scan completed — Synced to Dashboard', 'success');
         } else if (currentSt === 'failed') {
           if (pollRef.current) clearInterval(pollRef.current);
           setIsExecuting(false);
+          setIsBroadcasting(false);
           setScanStatus('failed');
           log('Scan failed.', 'error');
+          
+          // 🔥 Broadcast SCAN_FAILED event
+          EventBus.publish('SCAN_FAILED', {
+            scanId: id,
+            error: st.error || 'Scan failed',
+          }, 'live-scan-page');
+          
           pushToast('Scan failed', 'error');
         }
       } catch (err) {
@@ -897,6 +1034,10 @@ function LiveScanContent() {
             severity: f.severity,
             source: f.source,
             target: scanTarget,
+            category: (f as any).category || 'Code Security',
+            cwe: (f as any).cwe,
+            remediation: (f as any).remediation,
+            description: (f as any).description || `Detected during code scan of ${fileName}`,
           })),
         });
 
@@ -913,6 +1054,21 @@ function LiveScanContent() {
           findingsCount: finalFindings.length,
           score: directScore,
         });
+
+        // 🔥 Broadcast events to all other dashboard pages
+        EventBus.publish('SCAN_COMPLETED', {
+          scanId: generatedScanId,
+          target: scanTarget,
+          type: 'GITHUB',
+          mode: 'github',
+          findings: finalFindings,
+          score: directScore,
+          findingsCount: finalFindings.length,
+          timestamp: new Date().toISOString(),
+        }, 'live-scan-page');
+
+        EventBus.publish('DATA_REFRESHED', { timestamp: new Date().toISOString() }, 'live-scan-page');
+        EventBus.publish('REPORT_GENERATED', { scanId: generatedScanId, target: scanTarget, findingsCount: finalFindings.length }, 'live-scan-page');
 
         log(`Scan completed. ${finalFindings.length} findings recorded for ${fileName}.`, 'success');
         pushToast(`File scan completed — ${finalFindings.length} findings recorded!`, 'success');
@@ -1020,6 +1176,10 @@ function LiveScanContent() {
             severity: f.severity,
             source: f.source,
             target: scanTarget,
+            category: (f as any).category || (f.source.includes('Code') || f.source.includes('Secret') || f.source.includes('Gitleaks') || f.source.includes('Semgrep') ? 'Code Security' : 'Web Surface'),
+            cwe: (f as any).cwe,
+            remediation: (f as any).remediation,
+            description: (f as any).description || `Correlated finding detected across combined web & source audit of ${scanTarget}`,
           })),
         });
 
@@ -1036,6 +1196,21 @@ function LiveScanContent() {
           findingsCount: combinedResults.length,
           score: combScore,
         });
+
+        // 🔥 Broadcast events to all other dashboard pages (Findings, Reports, Dashboard, Analytics, AI Copilot)
+        EventBus.publish('SCAN_COMPLETED', {
+          scanId: generatedScanId,
+          target: scanTarget,
+          type: 'COMBINED',
+          mode: 'combined',
+          findings: combinedResults,
+          score: combScore,
+          findingsCount: combinedResults.length,
+          timestamp: new Date().toISOString(),
+        }, 'live-scan-page');
+
+        EventBus.publish('DATA_REFRESHED', { timestamp: new Date().toISOString() }, 'live-scan-page');
+        EventBus.publish('REPORT_GENERATED', { scanId: generatedScanId, target: scanTarget, findingsCount: combinedResults.length }, 'live-scan-page');
 
         log(`Combined scan completed. ${combinedResults.length} correlated findings recorded across web & code.`, 'success');
         pushToast(`Combined scan completed — ${combinedResults.length} findings recorded!`, 'success');
@@ -1145,6 +1320,21 @@ function LiveScanContent() {
           score: demoScore,
         });
 
+        // 🔥 Broadcast events to all other dashboard pages
+        EventBus.publish('SCAN_COMPLETED', {
+          scanId: scanId || `demo-scan-${Date.now()}`,
+          target: scanTarget,
+          type: mode.toUpperCase(),
+          mode,
+          findings: found,
+          score: demoScore,
+          findingsCount: found.length,
+          timestamp: new Date().toISOString(),
+        }, 'live-scan-page');
+
+        EventBus.publish('DATA_REFRESHED', { timestamp: new Date().toISOString() }, 'live-scan-page');
+        EventBus.publish('REPORT_GENERATED', { scanId: scanId || `demo-scan-${Date.now()}`, target: scanTarget, findingsCount: found.length }, 'live-scan-page');
+
         log(`Scan completed. ${found.length} unique findings saved & synced.`, 'success');
         pushToast(`Scan completed — ${found.length} findings synced to Dashboard!`, 'success');
       }
@@ -1162,37 +1352,99 @@ function LiveScanContent() {
     setScanProgress(0);
     setLogs([]);
     setFindings([]);
+    setRealtimeFindingsCount(0);
+    setIsBroadcasting(true);
     log('Submitting scan job…', 'info');
 
     // Handle Direct File Upload or Pasted Code Scan in GITHUB mode
     if (mode === 'github' && githubInputType === 'file_upload' && uploadedFile) {
+      const generatedScanId = `file-scan-${Date.now()}`;
+      setScanId(generatedScanId);
+      
+      // 🔥 Broadcast SCAN_STARTED event
+      EventBus.publish('SCAN_STARTED', {
+        scanId: generatedScanId,
+        target: uploadedFile.name,
+        mode: 'github',
+        profile: scanProfile,
+        engines: Array.from(selectedEngines),
+      }, 'live-scan-page');
+      
       runDirectFileScan(uploadedFile.name, uploadedFile.content);
       return;
     }
 
     if (mode === 'github' && githubInputType === 'code_paste' && pastedCode.trim()) {
+      const generatedScanId = `paste-scan-${Date.now()}`;
+      setScanId(generatedScanId);
+      
+      // 🔥 Broadcast SCAN_STARTED event
+      EventBus.publish('SCAN_STARTED', {
+        scanId: generatedScanId,
+        target: pastedFileName || 'snippet.js',
+        mode: 'github',
+        profile: scanProfile,
+        engines: Array.from(selectedEngines),
+      }, 'live-scan-page');
+      
       runDirectFileScan(pastedFileName || 'snippet.js', pastedCode);
       return;
     }
 
     // Handle Combined Mode with Direct File Upload or Pasted Code
     if (mode === 'combined' && githubInputType === 'file_upload' && uploadedFile) {
+      const generatedScanId = `comb-scan-${Date.now()}`;
+      setScanId(generatedScanId);
+      
+      // 🔥 Broadcast SCAN_STARTED event
+      EventBus.publish('SCAN_STARTED', {
+        scanId: generatedScanId,
+        target: `${targetUrl} + ${uploadedFile.name}`,
+        mode: 'combined',
+        profile: scanProfile,
+        engines: Array.from(selectedEngines),
+      }, 'live-scan-page');
+      
       runCombinedDirectFileScan(targetUrl, uploadedFile.name, uploadedFile.content);
       return;
     }
 
     if (mode === 'combined' && githubInputType === 'code_paste' && pastedCode.trim()) {
+      const generatedScanId = `comb-scan-${Date.now()}`;
+      setScanId(generatedScanId);
+      
+      // 🔥 Broadcast SCAN_STARTED event
+      EventBus.publish('SCAN_STARTED', {
+        scanId: generatedScanId,
+        target: `${targetUrl} + ${pastedFileName || 'snippet.js'}`,
+        mode: 'combined',
+        profile: scanProfile,
+        engines: Array.from(selectedEngines),
+      }, 'live-scan-page');
+      
       runCombinedDirectFileScan(targetUrl, pastedFileName || 'snippet.js', pastedCode);
       return;
     }
 
-    const scanTarget = mode === 'github' ? (repoUrl || targetUrl) : (targetUrl || repoUrl);
+    const scanTarget = mode === 'combined'
+      ? ((targetUrl && repoUrl) ? `${targetUrl} + ${repoUrl}` : (targetUrl || repoUrl))
+      : (mode === 'github' ? (repoUrl || targetUrl) : (targetUrl || repoUrl));
     const engineArr = Array.from(selectedEngines);
 
     try {
       if (demoMode) {
         const demoId = `demo-scan-${Date.now()}`;
         setScanId(demoId);
+        
+        // 🔥 Broadcast SCAN_STARTED event
+        EventBus.publish('SCAN_STARTED', {
+          scanId: demoId,
+          target: scanTarget,
+          mode,
+          profile: scanProfile,
+          engines: engineArr,
+        }, 'live-scan-page');
+        
         setActiveScanSession({
           scanId: demoId,
           target: scanTarget,
@@ -1230,6 +1482,16 @@ function LiveScanContent() {
       setScanId(id);
       log(`Scan job created (id: ${id}).`, 'success');
 
+      // 🔥 Broadcast SCAN_STARTED event
+      EventBus.publish('SCAN_STARTED', {
+        scanId: id,
+        target: scanTarget,
+        mode,
+        profile: scanProfile,
+        engines: engineArr,
+        workspaceId,
+      }, 'live-scan-page');
+
       setActiveScanSession({
         scanId: id,
         target: scanTarget,
@@ -1253,8 +1515,14 @@ function LiveScanContent() {
       setError('Failed to start scan: ' + msg);
       setIsExecuting(false);
       setScanStatus('idle');
+      setIsBroadcasting(false);
       setActiveScanSession(null);
       pushToast('Failed to start scan', 'error');
+      
+      // 🔥 Broadcast SCAN_FAILED event
+      EventBus.publish('SCAN_FAILED', {
+        error: msg,
+      }, 'live-scan-page');
     }
   };
 
@@ -1383,7 +1651,7 @@ function LiveScanContent() {
               <div className="grid grid-cols-3 gap-2">
                 {([
                   { id: 'website', label: 'Website', icon: Globe },
-                  { id: 'github', label: 'GitHub', icon: Target },
+                  { id: 'github', label: 'GitHub', icon: Github },
                   { id: 'combined', label: 'Combined', icon: Layers },
                 ] as const).map(m => {
                   const Icon = m.icon;

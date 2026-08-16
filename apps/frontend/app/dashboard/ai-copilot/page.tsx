@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useRef, useEffect, Suspense, useCallback } from 'react';
+import React, { useState, useRef, useEffect, Suspense, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Sparkles, Send, Bot, User, Shield, TrendingUp, AlertTriangle,
   CheckCircle, Lightbulb, Code, FileText, Loader2, Download, ShieldAlert,
   RefreshCw, Globe, Check, Paperclip, Image as ImageIcon, X, FileCode,
-  Eye, Maximize2, Trash2, ChevronDown, ChevronUp, UploadCloud,
+  Eye, Maximize2, Trash2, ChevronDown, ChevronUp, UploadCloud, Zap, Activity
 } from 'lucide-react';
 
 import {
@@ -15,7 +15,9 @@ import {
   getActiveScanSession,
   type ActiveScanSession,
 } from '@/lib/live-scan-store';
+import { useRealtimeSync, useRealtimeFindingEvents, useRealtimeScanEvents } from '@/hooks/useRealtimeSync';
 import { exportFindingsToMarkdown } from '@/lib/export-utils';
+import ReactMarkdown from 'react-markdown';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -50,6 +52,8 @@ interface ChatMessage {
   role: 'assistant' | 'user';
   content: string;
   attachment?: ChatAttachment;
+  provider?: string;
+  model?: string;
 }
 
 const INITIAL_MESSAGES: ChatMessage[] = [
@@ -62,6 +66,12 @@ const INITIAL_MESSAGES: ChatMessage[] = [
 function AICopilotContent() {
   const searchParams = useSearchParams();
   const { scans: liveScans, findings: liveFindings, lastUpdated } = useLiveScanSync(1000);
+  
+  // Real-time synchronization
+  const { isLive, eventCount, lastEventType } = useRealtimeSync();
+  const { findingAdded, totalFindingsAdded } = useRealtimeFindingEvents();
+  const { scanStarted, scanCompleted } = useRealtimeScanEvents();
+
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -99,562 +109,462 @@ function AICopilotContent() {
         fetch('/api/dashboard/overview', { headers }).catch(() => null),
       ]);
 
-      if (fRes && fRes.ok) {
-        const fData = await fRes.json();
-        const items = Array.isArray(fData) ? fData : (fData?.findings || fData?.items || []);
-        if (Array.isArray(items)) setDbFindings(items);
+      if (fRes?.ok) {
+        const json = await fRes.json();
+        setDbFindings(Array.isArray(json) ? json : (json?.items || json?.findings || json?.data || []));
+      }
+      if (sRes?.ok) {
+        const json = await sRes.json();
+        setDbScans(Array.isArray(json) ? json : (json?.scans || json?.items || json?.data || []));
+      }
+      if (oRes?.ok) {
+        setDbOverview(await oRes.json());
       }
 
-      if (sRes && sRes.ok) {
-        const sData = await sRes.json();
-        if (Array.isArray(sData)) setDbScans(sData);
+      if (isManual) {
+        setSyncToast('Synced with database');
+        setTimeout(() => setSyncToast(null), 2000);
       }
-
-      if (oRes && oRes.ok) {
-        const oData = await oRes.json();
-        setDbOverview(oData);
-      }
-    } catch {}
-    finally {
+    } catch (error) {
+      console.error('Sync error:', error);
+    } finally {
       if (isManual) setIsSyncing(false);
-      refreshActiveScan();
     }
-  }, [refreshActiveScan]);
+  }, []);
+
+  // Auto-populate context from active scans when new findings arrive
+  // (Removed per user request to prevent spamming chat with finding events)
+
 
   useEffect(() => {
-    fetchCopilotData(false);
     refreshActiveScan();
-
-    const handleInstantSync = () => {
-      fetchCopilotData(false);
-      refreshActiveScan();
-    };
-
-    const handleSessionUpdate = (e: any) => {
-      setActiveScan(e.detail || null);
-    };
-
-    window.addEventListener('securelens:scan-completed', handleInstantSync);
-    window.addEventListener('securelens:active-scan-updated', handleSessionUpdate);
-    window.addEventListener('storage', handleInstantSync);
-
-    return () => {
-      window.removeEventListener('securelens:scan-completed', handleInstantSync);
-      window.removeEventListener('securelens:active-scan-updated', handleSessionUpdate);
-      window.removeEventListener('storage', handleInstantSync);
-    };
-  }, [fetchCopilotData, refreshActiveScan]);
+    fetchCopilotData(false);
+    const interval = setInterval(() => fetchCopilotData(false), 15000);
+    return () => clearInterval(interval);
+  }, [refreshActiveScan, fetchCopilotData]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  }, [messages]);
 
-  const allActiveFindings = React.useMemo(() => {
-    const formattedLive = liveFindings.map(lf => ({ ...lf, scanId: lf.scanId || 'live' }));
-    const merged = [...formattedLive, ...dbFindings.filter(f => !formattedLive.some(l => l.id === f.id))];
-    return merged;
-  }, [liveFindings, dbFindings]);
+  // Handle explain and remediate actions passed from Findings page
+  useEffect(() => {
+    const action = searchParams.get('action');
+    const title = searchParams.get('title');
+    const severity = searchParams.get('severity');
+    const target = searchParams.get('target');
+    const cwe = searchParams.get('cwe');
 
-  const allActiveScans = React.useMemo(() => {
-    const merged = [...liveScans];
-    dbScans.forEach(ds => {
-      if (!merged.some(s => s.id === ds.id)) {
-        merged.push({ id: ds.id, target: ds.target, type: ds.type || 'WEBSITE', status: ds.status || 'COMPLETED', score: ds.riskScore ?? 80, findingsCount: ds.findingsCount || 0, time: ds.createdAt, createdAt: ds.createdAt, engines: ds.engines || [], findings: [] });
+    if (action && title) {
+      if (action === 'explain') {
+        setInput(`Explain the vulnerability "${title}" (${severity || 'UNKNOWN'} severity) found on target "${target || 'target asset'}"${cwe ? ` (CWE: ${cwe})` : ''}. What is the root cause, attack vector, and threat impact?`);
+      } else if (action === 'remediate') {
+        setInput(`Provide step-by-step remediation commands, configuration updates, and secure code patches to fix "${title}" (${severity || 'UNKNOWN'} severity) on "${target || 'target asset'}".`);
       }
-    });
-    return merged;
-  }, [liveScans, dbScans]);
-
-  const availableTargets = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    allActiveFindings.forEach(f => { if (f.target) counts[f.target] = (counts[f.target] ?? 0) + 1; });
-    allActiveScans.forEach(s => { if (s.target && counts[s.target] === undefined) counts[s.target] = s.findingsCount || 0; });
-    if (activeScan?.target && counts[activeScan.target] === undefined) counts[activeScan.target] = 0;
-    return Object.entries(counts).map(([target, count]) => ({ target, count }));
-  }, [allActiveFindings, allActiveScans, activeScan]);
-
-  const targetFilteredFindings = React.useMemo(() => {
-    if (selectedTarget === 'ALL') return allActiveFindings;
-    return allActiveFindings.filter(f => f.target === selectedTarget);
-  }, [allActiveFindings, selectedTarget]);
-
-  const dynamicSummary = React.useMemo(() => {
-    const totalScans = Math.max(1, allActiveScans.length);
-    const critCount = targetFilteredFindings.filter(f => String(f.severity).toUpperCase() === 'CRITICAL').length;
-    const highCount = targetFilteredFindings.filter(f => String(f.severity).toUpperCase() === 'HIGH').length;
-    const medCount = targetFilteredFindings.filter(f => String(f.severity).toUpperCase() === 'MEDIUM').length;
-    const lowCount = targetFilteredFindings.filter(f => String(f.severity).toUpperCase() === 'LOW').length;
-    const computedScore = Math.max(20, 100 - (critCount * 15 + highCount * 8 + medCount * 3));
-    
-    const sortedBySev = [...targetFilteredFindings].sort((a, b) => {
-      const order: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, INFO: 4 };
-      return (order[String(a.severity).toUpperCase()] ?? 5) - (order[String(b.severity).toUpperCase()] ?? 5);
-    });
-
-    const topRisks = sortedBySev.slice(0, 4).map(f => ({ name: f.title, severity: String(f.severity).toUpperCase() === 'CRITICAL' ? 'Critical' : 'High', cve: f.category || 'Vulnerability', remediation: f.remediation }));
-    const currentTargetName = selectedTarget === 'ALL' ? (allActiveScans[0]?.target || 'All Assets') : selectedTarget;
-    const recommendations = [
-      (critCount > 0 || highCount > 0) ? `Address ${critCount} Critical & ${highCount} High vulnerabilities on ${currentTargetName}.` : `Posture on ${currentTargetName} is solid.`,
-      `Enforce security headers on ${currentTargetName}.`,
-      'Rotate credentials and review exposed ports.',
-    ];
-
-    return {
-      totalScans, criticalFindings: critCount, highFindings: highCount, mediumFindings: medCount, lowFindings: lowCount,
-      resolvedIssues: Math.max(8, allActiveScans.length * 4), securityScore: computedScore, topRisks, recommendations,
-      severityData: [
-        { name: 'Critical', value: critCount, color: '#ef4444' },
-        { name: 'High', value: highCount, color: '#f97316' },
-        { name: 'Medium', value: medCount, color: '#eab308' },
-        { name: 'Low', value: lowCount, color: '#22c55e' },
-      ],
-    };
-  }, [targetFilteredFindings, allActiveScans, selectedTarget, allActiveFindings]);
-
-  const handleManualSync = async () => {
-    await fetchCopilotData(true);
-    setSyncToast('Live scan telemetry synchronized!');
-    setTimeout(() => setSyncToast(null), 3000);
-  };
-
-  const processUploadedFile = (file: File) => {
-    if (!file) return;
-    const isImg = file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|svg)$/i.test(file.name);
-
-    if (isImg) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        setAttachedItem({
-          name: file.name,
-          size: file.size,
-          type: file.type || 'image/png',
-          isImage: true,
-          previewUrl: base64,
-          base64: base64,
-        });
-      };
-      reader.readAsDataURL(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const text = reader.result as string;
-        setAttachedItem({
-          name: file.name,
-          size: file.size,
-          type: file.type || 'text/plain',
-          isImage: false,
-          content: text,
-        });
-      };
-      reader.readAsText(file);
     }
-  };
+  }, [searchParams]);
 
-  const handlePaste = (e: React.ClipboardEvent) => {
-    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
-      e.preventDefault();
-      processUploadedFile(e.clipboardData.files[0]);
-    }
-  };
+  const handleSendMessage = async () => {
+    if (!input.trim() && !attachedItem) return;
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processUploadedFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const sendMessage = async (prompt?: string) => {
-    const text = prompt || input;
-    if ((!text.trim() && !attachedItem) || loading) return;
-
-    const attachmentToSend = attachedItem;
-    let effectiveContent = text.trim();
-    if (!effectiveContent && attachmentToSend) {
-      effectiveContent = attachmentToSend.isImage
-        ? `Please inspect this attached security screenshot / image (${attachmentToSend.name}) and analyze any visible vulnerabilities, error logs, configuration flaws, or indicators of compromise.`
-        : `Please audit this attached source file (${attachmentToSend.name}) for security vulnerabilities, AST flaws, hardcoded secrets, and provide patched code.`;
-    }
-
-    const newMsg: ChatMessage = {
+    const userMessage: ChatMessage = {
       role: 'user',
-      content: effectiveContent,
-      attachment: attachmentToSend || undefined,
+      content: input,
+      attachment: attachedItem || undefined,
     };
 
-    const newMessages = [...messages, newMsg];
-    setMessages(newMessages);
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
     setAttachedItem(null);
     setLoading(true);
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const currentTargetName = selectedTarget === 'ALL' ? (allActiveScans[0]?.target || 'target') : selectedTarget;
-    const latestScanForTarget = allActiveScans.find(s => s.target === currentTargetName) || allActiveScans[0];
+    let aiConfig: any = {};
+    try {
+      const storedConfig = localStorage.getItem('securelens_ai_config');
+      if (storedConfig) aiConfig = JSON.parse(storedConfig);
+    } catch (e) {}
+
+    let aiKeys: any = {};
+    try {
+      const storedKeys = localStorage.getItem('securelens_ai_keys');
+      if (storedKeys) {
+        aiKeys = JSON.parse(storedKeys);
+      } else {
+        const storedSettings = localStorage.getItem('securelens_settings');
+        if (storedSettings) {
+          const s = JSON.parse(storedSettings);
+          if (s.aiKeys) aiKeys = s.aiKeys;
+          if (s.aiConfig && !aiConfig.primaryProvider) aiConfig = s.aiConfig;
+        }
+      }
+    } catch (e) {}
+
+    const primaryProv = aiConfig.primaryProvider || 'gemini';
+    const activeApiKey = aiKeys?.[primaryProv]?.apiKey || 
+      (typeof window !== 'undefined' ? (localStorage.getItem('securelens_gemini_key') || '') : '');
+    const activeModel = aiKeys?.[primaryProv]?.model || aiConfig.model || (primaryProv === 'gemini' ? 'gemini-3.5-flash-lite' : primaryProv === 'openrouter' ? 'nvidia/nemotron-3.5-lightning:free' : 'llama-3.3-70b-versatile');
+
+    const safeLiveScans = Array.isArray(liveScans) ? liveScans.slice(0, 5) : [];
+    const safeLiveFindings = Array.isArray(liveFindings) ? liveFindings.slice(0, 20) : [];
+    const safeDbFindings = Array.isArray(dbFindings) ? dbFindings.slice(0, 10) : [];
+    const safeDbScans = Array.isArray(dbScans) ? dbScans.slice(0, 5) : [];
 
     try {
-      const res = await fetch('/api/ai-copilot/chat', {
+      const response = await fetch('/api/ai-copilot/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: newMessages,
-          target: currentTargetName,
-          findingContext: targetFilteredFindings.slice(0, 8),
-          scanContext: latestScanForTarget ? {
-            id: latestScanForTarget.id,
-            target: latestScanForTarget.target,
-            score: latestScanForTarget.score,
-            findingsCount: latestScanForTarget.findingsCount,
-            engines: latestScanForTarget.engines,
-            status: latestScanForTarget.status
-          } : undefined
+          messages: [...messages, userMessage],
+          message: input,
+          provider: primaryProv,
+          apiKey: activeApiKey,
+          model: activeModel,
+          keysMap: aiKeys,
+          liveScans: safeLiveScans,
+          liveFindings: safeLiveFindings,
+          attachment: attachedItem,
+          scanContext: activeScan,
+          context: {
+            activeScan,
+            dbFindings: safeDbFindings,
+            dbScans: safeDbScans,
+          }
         }),
       });
 
-      if (res.ok) {
-        const json = await res.json();
-        setMessages(prev => [...prev, { role: 'assistant', content: json.reply || 'No response.' }]);
-      } else throw new Error();
-    } catch {
+      if (response.ok) {
+        const data = await response.json();
+        const reply = data.reply || data.message || 'No response generated.';
+        setMessages(prev => [...prev, { role: 'assistant', content: reply, provider: data.provider, model: data.model }]);
+      } else {
+        const errData = await response.json().catch(() => ({}));
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `❌ Assistant response failed: ${errData.reply || errData.message || 'Server error'}`
+        }]);
+      }
+    } catch (error: any) {
+      console.error('Chat error:', error);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: `### Intelligence for **${currentTargetName}**\n\nScore: ${dynamicSummary.securityScore}/100\nActive Findings: ${targetFilteredFindings.length}.\n\n` +
-          (attachmentToSend ? `**Attachment Analyzed**: \`${attachmentToSend.name}\` (${(attachmentToSend.size / 1024).toFixed(1)} KB)\n\nAudit complete: Verify CSP/HSTS header enforcement, input sanitization, and secret credential rotation.` : 'Apply strict CSP/HSTS and sanitize all inputs.')
+        content: `❌ Connection error: ${error.message || 'Could not connect to AI service. Ensure backend is running.'}`
       }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleExportRemediationPlan = () => exportFindingsToMarkdown(targetFilteredFindings as any, selectedTarget === 'ALL' ? 'All_Websites' : selectedTarget);
+  const allFindingsList = useMemo(() => {
+    const list: any[] = [...liveFindings];
+    const knownIds = new Set(list.map(f => f.id));
+
+    liveScans.forEach(s => {
+      if (Array.isArray(s.findings)) {
+        s.findings.forEach(f => {
+          if (f && f.id && !knownIds.has(f.id)) {
+            knownIds.add(f.id);
+            list.push(f);
+          }
+        });
+      }
+    });
+
+    if (Array.isArray(dbFindings)) {
+      dbFindings.forEach(df => {
+        if (df && df.id && !knownIds.has(df.id)) {
+          knownIds.add(df.id);
+          list.push(df);
+        }
+      });
+    }
+
+    return list.length > 0 ? list : [
+      { id: 'f-1', severity: 'CRITICAL', title: 'SQL Injection in Login Endpoint' },
+      { id: 'f-2', severity: 'CRITICAL', title: 'Exposed AWS Credentials' },
+      { id: 'f-3', severity: 'HIGH', title: 'Missing Content-Security-Policy' },
+      { id: 'f-4', severity: 'HIGH', title: 'Weak TLS 1.0/1.1 Protocols Supported' },
+      { id: 'f-5', severity: 'MEDIUM', title: 'Weak DMARC Policy' },
+      { id: 'f-6', severity: 'MEDIUM', title: 'Swagger UI Exposed' },
+    ];
+  }, [liveFindings, liveScans, dbFindings]);
+
+  const allScansList = useMemo(() => {
+    const list: any[] = [...liveScans];
+    const knownIds = new Set(list.map(s => s.id));
+
+    if (Array.isArray(dbScans)) {
+      dbScans.forEach(ds => {
+        if (ds && ds.id && !knownIds.has(ds.id)) {
+          knownIds.add(ds.id);
+          list.push(ds);
+        }
+      });
+    }
+
+    return list.length > 0 ? list : [
+      { id: 'scan-1', target: 'https://uptoskills.com', status: 'COMPLETED' }
+    ];
+  }, [liveScans, dbScans]);
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-4 max-w-7xl mx-auto">
-      <AnimatePresence>
-        {syncToast && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="fixed top-20 right-8 z-50 px-4 py-3 rounded-xl bg-violet-600 text-white text-xs font-semibold shadow-2xl flex items-center gap-2 border border-violet-400/30 backdrop-blur-xl">
-            <Check size={14} className="text-white" />
-            {syncToast}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Lightbox Modal for Image Preview */}
-      <AnimatePresence>
-        {previewModalImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setPreviewModalImage(null)}
-            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
-          >
-            <div className="relative max-w-4xl max-h-[90vh] bg-[#0c0c16] rounded-2xl border border-white/10 p-3 overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-              <button
-                onClick={() => setPreviewModalImage(null)}
-                className="absolute top-5 right-5 p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors z-10 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-              <img src={previewModalImage} alt="Attachment Preview" className="max-w-full max-h-[80vh] object-contain rounded-xl" />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Header */}
+    <motion.div
+      className="space-y-6"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
+      {/* Top Header */}
       <motion.div variants={itemVariants} className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-violet-600/20 text-violet-400 border border-violet-500/30 shadow-inner">
-            <Sparkles size={22} />
+          <div className="p-2.5 rounded-xl bg-violet-600/20 text-violet-400 border border-violet-500/30">
+            <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-white tracking-tight">AI Security Copilot</h1>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live Multimodal
-              </span>
-            </div>
-            <p className="text-xs text-gray-400 mt-0.5">Real-time vulnerability analysis, file AST auditing, and vision screenshot intelligence.</p>
+            <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2.5">
+              AI Security Copilot
+              {isLive && (
+                <span className="flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  LIVE SYNC
+                </span>
+              )}
+            </h1>
+            <p className="text-sm text-gray-400 mt-1">Context-aware multi-vector vulnerability intelligence & code remediation</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-3">
           <button
-            onClick={handleManualSync}
+            onClick={() => fetchCopilotData(true)}
             disabled={isSyncing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-medium text-gray-300 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-xs font-semibold text-gray-300 hover:text-white transition-all cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw size={13} className={isSyncing ? 'animate-spin text-violet-400' : 'text-gray-400'} />
-            {isSyncing ? 'Syncing…' : 'Sync Telemetry'}
-          </button>
-
-          <button
-            onClick={handleExportRemediationPlan}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-violet-600/20 hover:bg-violet-600/30 border border-violet-500/30 text-violet-300 text-xs font-semibold transition-all cursor-pointer shadow-sm"
-          >
-            <Download size={13} /> Export Plan (.md)
+            <RefreshCw className={`w-3.5 h-3.5 text-violet-400 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>Sync Live Telemetry</span>
           </button>
         </div>
       </motion.div>
 
-      {/* Target Asset Filter */}
-      {availableTargets.length > 0 && (
-        <motion.div variants={itemVariants} className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <span className="text-xs font-semibold text-gray-400 whitespace-nowrap mr-1 flex items-center gap-1">
-            <Globe size={13} className="text-violet-400" /> Target Asset:
-          </span>
-          <button
-            onClick={() => setSelectedTarget('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
-              selectedTarget === 'ALL'
-                ? 'bg-violet-600/20 text-violet-300 border-violet-500/40 shadow-sm'
-                : 'bg-white/[0.02] text-gray-400 border-white/[0.06] hover:bg-white/[0.04]'
-            }`}
-          >
-            All Assets ({allActiveFindings.length})
-          </button>
-          {availableTargets.map(({ target, count }) => (
-            <button
-              key={target}
-              onClick={() => setSelectedTarget(target)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer flex items-center gap-1.5 ${
-                selectedTarget === target
-                  ? 'bg-violet-600/20 text-violet-300 border-violet-500/40 shadow-sm'
-                  : 'bg-white/[0.02] text-gray-400 border-white/[0.06] hover:bg-white/[0.04]'
-              }`}
-            >
-              <span className="truncate max-w-[200px]">{target}</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/10">{count}</span>
-            </button>
-          ))}
+      {syncToast && (
+        <motion.div
+          className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 font-medium flex items-center gap-2"
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Check size={14} /> {syncToast}
         </motion.div>
       )}
 
-      {/* Dedicated Interactive AI Chat Interface */}
-      <motion.div variants={itemVariants} className="space-y-4">
-        {/* Hidden Native File & Image Inputs */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          onChange={e => {
-            if (e.target.files && e.target.files.length > 0) {
-              processUploadedFile(e.target.files[0]);
-            }
-          }}
-          accept=".js,.jsx,.ts,.tsx,.py,.php,.java,.go,.rb,.json,.sql,.env,.log,.txt,.tf,.yaml,.yml,Dockerfile,Makefile,package.json,requirements.txt,pom.xml,.csv,.md"
-        />
-        <input
-          ref={imageInputRef}
-          type="file"
-          className="hidden"
-          onChange={e => {
-            if (e.target.files && e.target.files.length > 0) {
-              processUploadedFile(e.target.files[0]);
-            }
-          }}
-          accept="image/png,image/jpeg,image/jpg,image/webp,image/gif,image/svg+xml"
-        />
-
-        {/* Chat Container with Drag & Drop */}
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onPaste={handlePaste}
-          className={`rounded-2xl bg-white/[0.02] border p-4 flex flex-col h-[650px] transition-all relative ${
-            isDraggingOver
-              ? 'border-violet-500 bg-violet-600/10 ring-2 ring-violet-500/30'
-              : 'border-white/[0.06]'
-          }`}
-        >
-          {/* Drag and drop overlay */}
-          {isDraggingOver && (
-            <div className="absolute inset-0 z-30 bg-[#0a0a14]/90 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center pointer-events-none border-2 border-dashed border-violet-500">
-              <UploadCloud size={40} className="text-violet-400 animate-bounce mb-2" />
-              <p className="text-sm font-semibold text-white">Drop your source code file or screenshot here</p>
-              <p className="text-xs text-violet-300">SecureLens AI Copilot will audit it immediately</p>
-            </div>
-          )}
-
-          {/* Message Feed */}
-          <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-thin scrollbar-thumb-white/10">
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex items-start gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`p-2 rounded-xl shrink-0 ${
-                  msg.role === 'assistant'
-                    ? 'bg-violet-600/20 text-violet-400 border border-violet-500/30'
-                    : 'bg-white/10 text-white'
-                }`}>
-                  {msg.role === 'assistant' ? <Bot size={15} /> : <User size={15} />}
-                </div>
-
-                <div className="space-y-2 max-w-[84%]">
-                  {/* Attached Image inside User Message Bubble */}
-                  {msg.attachment?.isImage && msg.attachment?.previewUrl && (
-                    <div
-                      onClick={() => setPreviewModalImage(msg.attachment?.previewUrl || null)}
-                      className="group relative cursor-pointer overflow-hidden rounded-xl border border-white/15 bg-black/40 hover:border-violet-500/60 transition-all max-w-sm"
-                    >
-                      <img src={msg.attachment.previewUrl} alt={msg.attachment.name} className="max-h-48 w-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2.5">
-                        <span className="text-[11px] text-white font-medium truncate max-w-[200px]">{msg.attachment.name}</span>
-                        <span className="p-1 rounded bg-white/20 text-white"><Maximize2 size={12} /></span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Attached Code / Manifest File inside User Message Bubble */}
-                  {msg.attachment && !msg.attachment.isImage && (
-                    <div className="rounded-xl bg-[#0e0e1a] border border-violet-500/30 p-2.5 space-y-2 text-xs">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="p-1.5 rounded-lg bg-violet-600/20 text-violet-400 shrink-0"><FileCode size={14} /></span>
-                          <div className="min-w-0">
-                            <p className="font-semibold text-white truncate text-xs">{msg.attachment.name}</p>
-                            <p className="text-[10px] text-gray-400">{(msg.attachment.size / 1024).toFixed(1)} KB · Code file</p>
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Chat Messages */}
+        <div className="lg:col-span-2">
+          <motion.div
+            className="bg-white/[0.02] rounded-2xl border border-white/[0.06] shadow-xl flex flex-col h-[calc(100vh-220px)] min-h-[500px]"
+            variants={itemVariants}
+          >
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <AnimatePresence>
+                {messages.map((msg, i) => (
+                  <motion.div
+                    key={i}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    {msg.role === 'assistant' ? (
+                      <div className="max-w-2xl w-full p-4 rounded-xl bg-[#0e111d] border border-white/[0.08] text-gray-100 shadow-xl space-y-2">
+                        <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+                          <div className="flex items-center gap-1.5">
+                            <div className="p-1 rounded-md bg-violet-600/20 text-violet-400 border border-violet-500/30">
+                              <Bot size={13} />
+                            </div>
+                            <span className="text-xs font-semibold text-white">SecureLens Copilot</span>
                           </div>
+                          {msg.provider && (
+                            <div className="flex items-center gap-1 text-[10px] text-violet-300 bg-violet-500/10 px-2 py-0.5 rounded-full border border-violet-500/20">
+                              <Sparkles size={10} />
+                              <span>{msg.provider} {msg.model ? `· ${msg.model}` : ''}</span>
+                            </div>
+                          )}
                         </div>
-                        {msg.attachment.content && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedCodeIndex(expandedCodeIndex === i ? null : i)}
-                            className="px-2 py-1 rounded bg-white/[0.06] hover:bg-white/[0.1] text-[10px] text-gray-300 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                        <div className="text-xs sm:text-sm text-gray-200 leading-relaxed overflow-x-auto space-y-1.5">
+                          <ReactMarkdown
+                            components={{
+                              h1: ({node, ...props}) => <h1 className="text-sm font-bold text-white mt-2 mb-1 border-b border-white/[0.08] pb-1" {...props} />,
+                              h2: ({node, ...props}) => <h2 className="text-xs font-bold text-violet-300 mt-2 mb-1" {...props} />,
+                              h3: ({node, ...props}) => <h3 className="text-xs font-semibold text-gray-200 mt-1 mb-0.5" {...props} />,
+                              p: ({node, ...props}) => <p className="mb-1.5 leading-relaxed text-gray-300" {...props} />,
+                              ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-0.5 mb-1.5 text-gray-300" {...props} />,
+                              ol: ({node, ...props}) => <ol className="list-decimal pl-4 space-y-0.5 mb-1.5 text-gray-300" {...props} />,
+                              code: ({node, className, children, ...props}) => {
+                                return (
+                                  <code className="bg-black/50 text-violet-300 px-1 py-0.5 rounded text-[11px] font-mono border border-white/10" {...props}>
+                                    {children}
+                                  </code>
+                                );
+                              },
+                              pre: ({node, ...props}) => (
+                                <pre className="bg-[#07090e] p-2.5 rounded-lg border border-white/[0.08] overflow-x-auto text-xs font-mono text-gray-200 my-1.5" {...props} />
+                              ),
+                            }}
                           >
-                            {expandedCodeIndex === i ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                            {expandedCodeIndex === i ? 'Hide Code' : 'View Code'}
-                          </button>
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                        {msg.attachment && (
+                          <div className="mt-1.5 text-[11px] text-gray-400 bg-black/30 p-1.5 rounded-lg border border-white/[0.06]">
+                            📎 Attached: {msg.attachment.name}
+                          </div>
                         )}
                       </div>
-                      {expandedCodeIndex === i && msg.attachment.content && (
-                        <pre className="p-2.5 rounded-lg bg-black/60 border border-white/[0.06] font-mono text-[11px] text-gray-300 max-h-48 overflow-y-auto whitespace-pre-wrap">
-                          {msg.attachment.content}
-                        </pre>
-                      )}
-                    </div>
-                  )}
+                    ) : (
+                      <div className="max-w-md p-3.5 rounded-xl bg-violet-600 text-white shadow-lg">
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        {msg.attachment && (
+                          <div className="mt-1.5 text-xs opacity-75">
+                            📎 {msg.attachment.name}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
 
-                  {/* Text Bubble */}
-                  <div className={`p-4 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap ${
-                    msg.role === 'assistant'
-                      ? 'bg-white/[0.03] border border-white/[0.06] text-gray-200 shadow-sm'
-                      : 'bg-violet-600 text-white font-medium shadow-md shadow-violet-600/20'
-                  }`}>
-                    {msg.content}
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {loading && (
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-violet-600/20 text-violet-400 border border-violet-500/30"><Bot size={15} /></div>
-                <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center gap-2 text-xs text-gray-400"><Loader2 size={13} className="animate-spin text-violet-400" />Analyzing live telemetry & attachments…</div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-
-          {/* Input Area & Attachment Previews */}
-          <div className="pt-3 border-t border-white/[0.04] space-y-2">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {QUICK_ACTIONS.map(qa => (
-                <button
-                  key={qa.label}
-                  type="button"
-                  onClick={() => sendMessage(qa.prompt)}
-                  className="px-2.5 py-1 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-[11px] text-gray-400 hover:text-white transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer"
+              {/* Animated Thinking & Loading Indicator */}
+              {loading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-start"
                 >
-                  <qa.icon size={11} /> {qa.label}
-                </button>
-              ))}
+                  <div className="max-w-md p-3.5 rounded-xl bg-[#0e111d] border border-violet-500/30 text-gray-100 shadow-xl flex items-center gap-3">
+                    <div className="flex space-x-1.5">
+                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="text-xs text-violet-300 font-medium">
+                      Analyzing security context & formulating reply...
+                    </span>
+                  </div>
+                </motion.div>
+              )}
+              <div ref={chatEndRef} />
             </div>
 
-            {attachedItem && (
-              <div className="p-2 rounded-xl bg-violet-950/40 border border-violet-500/30 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {attachedItem.isImage && attachedItem.previewUrl ? (
-                    <img src={attachedItem.previewUrl} alt="Thumbnail" className="w-8 h-8 rounded-lg object-cover border border-violet-400/30" />
-                  ) : (
-                    <div className="p-1.5 rounded-lg bg-violet-600/20 text-violet-400">
-                      <FileCode size={16} />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">{attachedItem.name}</p>
-                    <p className="text-[10px] text-violet-300">{(attachedItem.size / 1024).toFixed(1)} KB · {attachedItem.isImage ? 'Screenshot/Image' : 'Source File'} attached</p>
-                  </div>
-                </div>
+            {/* Input Area */}
+            <div className="border-t border-white/[0.06] p-4 bg-[#090b14]/50 rounded-b-2xl">
+              <div className="flex gap-2 mb-2">
                 <button
-                  type="button"
-                  onClick={() => setAttachedItem(null)}
-                  className="p-1.5 text-gray-400 hover:text-red-400 rounded-md hover:bg-red-500/10 transition-colors cursor-pointer"
-                  title="Remove attachment"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
-
-            <form onSubmit={e => { e.preventDefault(); sendMessage(); }} className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white/[0.03] border border-white/[0.06] rounded-xl px-2 py-1">
-                <button
-                  type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={loading}
-                  title="Upload code, log, or config file"
-                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
+                  className="p-2 hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
+                  title="Upload code / config file"
                 >
-                  <Paperclip size={16} />
+                  <Paperclip className="w-4 h-4 text-gray-400 hover:text-white" />
                 </button>
                 <button
-                  type="button"
                   onClick={() => imageInputRef.current?.click()}
-                  disabled={loading}
-                  title="Upload security screenshot"
-                  className="p-1.5 text-gray-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
+                  className="p-2 hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
+                  title="Upload vulnerability screenshot"
                 >
-                  <ImageIcon size={16} />
+                  <ImageIcon className="w-4 h-4 text-gray-400 hover:text-white" />
+                </button>
+                {attachedItem && (
+                  <span className="text-xs px-2.5 py-1 rounded-md bg-violet-600/20 text-violet-300 border border-violet-500/30 flex items-center gap-1.5">
+                    📎 {attachedItem.name}
+                    <button onClick={() => setAttachedItem(null)} className="hover:text-white"><X size={12} /></button>
+                  </span>
+                )}
+              </div>
+              
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Ask me about your scans, findings, or security recommendations..."
+                  className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500/60 transition-colors"
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={loading || (!input.trim() && !attachedItem)}
+                  className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 rounded-xl transition-all cursor-pointer shadow-md shadow-violet-600/25 text-white"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 </button>
               </div>
+
               <input
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                placeholder={attachedItem ? `Ask AI Copilot to audit "${attachedItem.name}"…` : `Ask AI Copilot about ${selectedTarget === 'ALL' ? 'all assets' : selectedTarget}…`}
-                className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-2.5 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-violet-500/50 transition-colors"
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setAttachedItem({
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    isImage: false,
+                  });
+                }}
               />
-              <button
-                type="submit"
-                disabled={(!input.trim() && !attachedItem) || loading}
-                className="p-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white transition-colors cursor-pointer shadow-md shadow-violet-600/20"
-              >
-                <Send size={14} />
-              </button>
-            </form>
-          </div>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setAttachedItem({
+                    name: file.name,
+                    size: file.size,
+                    type: file.type,
+                    isImage: true,
+                  });
+                }}
+              />
+            </div>
+          </motion.div>
         </div>
-      </motion.div>
+
+        {/* Quick Actions Sidebar */}
+        <motion.div className="space-y-3" variants={itemVariants}>
+          <h3 className="text-sm font-semibold text-white mb-3">Quick Actions</h3>
+          {QUICK_ACTIONS.map((action, i) => (
+            <button
+              key={i}
+              onClick={() => setInput(action.prompt)}
+              className="w-full p-3.5 bg-white/[0.02] hover:bg-white/[0.04] border border-white/[0.06] hover:border-violet-500/30 rounded-xl transition-all text-left group cursor-pointer"
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="p-2 rounded-lg bg-violet-600/10 border border-violet-500/20 text-violet-400 group-hover:text-violet-300 shrink-0">
+                  <action.icon size={15} />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-white group-hover:text-violet-300 transition-colors">{action.label}</div>
+                  <div className="text-[11px] text-gray-400 line-clamp-2 mt-0.5 leading-snug group-hover:text-gray-300">{action.prompt}</div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </motion.div>
+      </div>
     </motion.div>
   );
 }
 
-export default function AICopilotPage() {
+export default function AICopilot() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-24"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-violet-500" /></div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading...</div>}>
       <AICopilotContent />
     </Suspense>
   );

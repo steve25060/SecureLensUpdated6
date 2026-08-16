@@ -88,7 +88,10 @@ export class AuthService {
   // ─── Login (email + password) ───────────────────────────────────────────────
 
   async validateUser(loginDto: LoginDto) {
-    const submitted = loginDto.username.trim();
+    const submitted = (loginDto.username || loginDto.email || '').trim();
+    if (!submitted) {
+      throw new UnauthorizedException('Email or username is required');
+    }
     const isDemoCreds =
       DEMO_USERS.includes(submitted.toLowerCase()) && loginDto.password === DEMO_PASSWORD;
 

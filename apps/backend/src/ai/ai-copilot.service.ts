@@ -54,9 +54,9 @@ export class AICopilotService {
   private customFailoverOrder: AIProvider[] = ['gemini', 'groq', 'openrouter', 'openai', 'claude', 'ollama'];
 
   private providerRegistry: Record<AIProvider, ProviderConfig> = {
-    gemini: { apiKey: '', model: 'gemini-3.5-flash', enabled: true },
+    gemini: { apiKey: '', model: 'gemini-3.5-flash-lite', enabled: true },
     groq: { apiKey: '', model: 'llama-3.3-70b-versatile', enabled: true },
-    openrouter: { apiKey: '', model: 'meta-llama/llama-3.3-70b-instruct:free', enabled: true },
+    openrouter: { apiKey: '', model: 'nvidia/nemotron-3.5-lightning:free', enabled: true },
     openai: { apiKey: '', model: 'gpt-4o-mini', enabled: true },
     claude: { apiKey: '', model: 'claude-3-5-sonnet-20241022', enabled: true },
     ollama: { apiKey: 'http://localhost:11434', model: 'llama3.3', enabled: true },
@@ -170,9 +170,9 @@ export class AICopilotService {
         ollama: { configured: true, model: this.providerRegistry.ollama.model, enabled: this.providerRegistry.ollama.enabled !== false },
       },
       supportedProviders: [
-        { id: 'gemini', name: 'Google Gemini (3.5 / 3.7 Flash)', free: true, url: 'https://aistudio.google.com/app/apikey', defaultModel: 'gemini-3.5-flash', configured: !!this.providerRegistry.gemini.apiKey },
+        { id: 'gemini', name: 'Google Gemini (2.5 / 2.0 Flash)', free: true, url: 'https://aistudio.google.com/app/apikey', defaultModel: 'gemini-2.5-flash', configured: !!this.providerRegistry.gemini.apiKey },
         { id: 'groq', name: 'Groq Cloud (Llama 3.3 70B & DeepSeek R1)', free: true, url: 'https://console.groq.com/keys', defaultModel: 'llama-3.3-70b-versatile', configured: !!this.providerRegistry.groq.apiKey },
-        { id: 'openrouter', name: 'OpenRouter (Free Llama 3.3 / DeepSeek)', free: true, url: 'https://openrouter.ai/keys', defaultModel: 'meta-llama/llama-3.3-70b-instruct:free', configured: !!this.providerRegistry.openrouter.apiKey },
+        { id: 'openrouter', name: 'OpenRouter (Free Llama 3.3 / DeepSeek / Gemini)', free: true, url: 'https://openrouter.ai/keys', defaultModel: 'meta-llama/llama-3.3-70b-instruct:free', configured: !!this.providerRegistry.openrouter.apiKey },
         { id: 'openai', name: 'OpenAI (GPT-4o & o3-mini)', free: false, url: 'https://platform.openai.com/api-keys', defaultModel: 'gpt-4o-mini', configured: !!this.providerRegistry.openai.apiKey },
         { id: 'claude', name: 'Anthropic Claude (3.5 Sonnet & Haiku)', free: false, url: 'https://console.anthropic.com/', defaultModel: 'claude-3-5-sonnet-20241022', configured: !!this.providerRegistry.claude.apiKey },
         { id: 'ollama', name: 'Local Ollama (Llama 3.3 / Qwen 2.5 / DeepSeek)', free: true, url: 'http://localhost:11434', defaultModel: 'llama3.3', configured: true },
@@ -406,8 +406,15 @@ Format your answer with:
   /**
    * 1. Google Gemini API (Free: Gemini 3.5 Flash / Gemini 3.7 Flash / Gemini 3.1 Flash Lite)
    */
-  private async callGemini(messages: ChatMessage[], apiKey: string, model: string = 'gemini-3.5-flash', systemPrompt?: string): Promise<string> {
-    const modelsToTry = [model, 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-3.1-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  private async callGemini(messages: ChatMessage[], apiKey: string, model: string = 'gemini-3.5-flash-lite', systemPrompt?: string): Promise<string> {
+    const modelsToTry = [
+      model,
+      'gemini-3.5-flash-lite',
+      'gemini-flash-latest',
+      'gemini-3.5-flash',
+      'gemini-3.7-flash',
+      'gemma-4-31b-it',
+    ].filter(Boolean);
     const uniqueModels = Array.from(new Set(modelsToTry));
 
     let lastError = '';
@@ -462,14 +469,11 @@ Format your answer with:
         } else {
           const errText = await res.text();
           lastError = `Gemini model ${m} error (${res.status}): ${errText}`;
-          if (res.status === 404 || res.status === 503) {
-            continue;
-          } else {
-            throw new Error(lastError);
-          }
+          continue;
         }
       } catch (err: any) {
         lastError = err.message;
+        continue;
       }
     }
 
@@ -500,27 +504,48 @@ Format your answer with:
       }
     });
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: formattedMessages,
-        temperature: 0.3,
-        max_tokens: 1500,
-      }),
-    });
+    const modelsToTry = [
+      model,
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+      'qwen/qwen3.6-27b',
+      'groq/compound',
+    ].filter(Boolean);
+    const uniqueModels = Array.from(new Set(modelsToTry));
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Groq API error (${res.status}): ${errText}`);
+    let lastError = '';
+    for (const m of uniqueModels) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: m,
+            messages: formattedMessages,
+            temperature: 0.3,
+            max_tokens: 1500,
+          }),
+        });
+
+        if (res.ok) {
+          const json = await res.json();
+          const content = json?.choices?.[0]?.message?.content;
+          if (content) return content;
+        } else {
+          const errText = await res.text();
+          lastError = `Groq model ${m} error (${res.status}): ${errText}`;
+          continue;
+        }
+      } catch (err: any) {
+        lastError = err.message;
+        continue;
+      }
     }
 
-    const json = await res.json();
-    return json?.choices?.[0]?.message?.content || 'No response generated by Groq.';
+    throw new Error(lastError || 'Groq API failed to generate content');
   }
 
   /**
@@ -724,13 +749,13 @@ Format your answer with:
 
   private getDefaultModel(provider: AIProvider): string {
     switch (provider) {
-      case 'gemini': return 'gemini-3.5-flash';
+      case 'gemini': return 'gemini-2.5-flash';
       case 'groq': return 'llama-3.3-70b-versatile';
       case 'openrouter': return 'meta-llama/llama-3.3-70b-instruct:free';
       case 'openai': return 'gpt-4o-mini';
       case 'claude': return 'claude-3-5-sonnet-20241022';
       case 'ollama': return 'llama3.3';
-      default: return 'gemini-3.5-flash';
+      default: return 'gemini-2.5-flash';
     }
   }
 

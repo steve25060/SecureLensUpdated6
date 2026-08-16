@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "dist",
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": false,
+    "paths": {
+      "@securelens/constants": ["../../packages/constants/dist/index.js"],
+      "@securelens/logger": ["../../packages/logger/dist/index.js"],
+      "@securelens/findings-schema": ["../../packages/findings-schema/dist/index.js"],
+      "@securelens/shared-types": ["../../packages/shared-types/dist/index.js"],
+      "@securelens/shared-utils": ["../../packages/shared-utils/dist/index.js"],
+      "@prisma/client": ["../backend/node_modules/@prisma/client"]
+    }
+  },
+  "include": ["src/**/*.ts", "main.ts"]
+}

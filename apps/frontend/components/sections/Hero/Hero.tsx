@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Code2, GitBranch, Globe2, ShieldCheck } from "lucide-react";
+import { Code2, Globe2, ShieldCheck } from "lucide-react";
+import { Github } from "@/components/common/GithubIcon";
 
 import HeroButtons from "./HeroButtons";
 import HeroBackground from "./HeroBackground";
@@ -19,7 +20,7 @@ const scanTypes = [
   {
     title: "GitHub Analysis",
     description: "Scan repositories and code",
-    icon: GitBranch,
+    icon: Github,
     className: "from-sky-600 to-blue-600",
   },
   {

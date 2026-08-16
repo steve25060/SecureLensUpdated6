@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,12 +43,31 @@ interface NavLinksProps {
 
 const NavLinks: React.FC<NavLinksProps> = ({ pathname, onClose }) => {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(3);
+
+  useEffect(() => {
+    const updateUnread = () => {
+      try {
+        const readIds: string[] = JSON.parse(localStorage.getItem('sl_read_notifications') || '[]');
+        const deletedIds: string[] = JSON.parse(localStorage.getItem('sl_deleted_notifications') || '[]');
+        const seedUnread = ['n-1', 'n-2', 'n-3'].filter(id => !readIds.includes(id) && !deletedIds.includes(id)).length;
+        setUnreadCount(seedUnread);
+      } catch {}
+    };
+    updateUnread();
+    window.addEventListener('storage', updateUnread);
+    window.addEventListener('userProfileUpdated', updateUnread);
+    return () => {
+      window.removeEventListener('storage', updateUnread);
+      window.removeEventListener('userProfileUpdated', updateUnread);
+    };
+  }, []);
 
   return (
     <nav className="mt-3 space-y-1 px-3" aria-label="Main navigation">
       {NAV_ITEMS.map((item, index) => {
         const { name, href, icon: Icon } = item;
-        const badge = 'badge' in item ? item.badge : undefined;
+        const badgeCount: number = name === 'Notifications' ? unreadCount : ('badge' in item ? Number(item.badge) : 0);
         const isActive =
           href === '/dashboard'
             ? pathname === '/dashboard'
@@ -106,13 +125,13 @@ const NavLinks: React.FC<NavLinksProps> = ({ pathname, onClose }) => {
                     <Icon size={16} className="transition-transform duration-200 group-hover:scale-110" />
                   </div>
                   <span className="relative z-10 flex-1">{name}</span>
-                  {badge && badge > 0 && (
+                  {badgeCount > 0 && (
                     <motion.span
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       className="text-[10px] font-bold bg-gradient-to-r from-red-500 to-rose-500 text-white rounded-full px-1.5 py-0.5 leading-none shadow-lg shadow-red-500/25 relative z-10"
                     >
-                      {badge}
+                      {badgeCount}
                     </motion.span>
                   )}
                 </motion.div>
