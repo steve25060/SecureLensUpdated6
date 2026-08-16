@@ -11,6 +11,8 @@ services:
     startCommand: cd apps/backend && npx prisma db push --accept-data-loss && node dist/main.js
     healthCheckPath: /api/ai-copilot/status
     envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
       - key: NODE_ENV
         value: production
       - key: PORT
@@ -39,6 +41,8 @@ services:
     buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build:frontend
     startCommand: pnpm run start:frontend
     envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
       - key: NODE_ENV
         value: production
       - key: PORT

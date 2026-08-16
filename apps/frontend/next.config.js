@@ -16,8 +16,18 @@ const nextConfig = {
    * Set NEXT_PUBLIC_BACKEND_URL in .env to control backend URL
    */
   async rewrites() {
-    const backendUrl =
+    let backendUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
+
+    // Ensure backendUrl starts with http://, https://, or /
+    if (
+      !backendUrl.startsWith('http://') &&
+      !backendUrl.startsWith('https://') &&
+      !backendUrl.startsWith('/')
+    ) {
+      backendUrl = `https://${backendUrl}`;
+    }
+    backendUrl = backendUrl.replace(/\/+$/, '');
 
     // Use rewrites for all environments
     return [
