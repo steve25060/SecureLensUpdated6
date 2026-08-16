@@ -81,7 +81,7 @@ async function bootstrap() {
   logger.log(`═══════════════════════════════════════════════════════════════`);
   logger.log(`Environment: ${nodeEnv}`);
   logger.log(`Port: ${port}`);
-  logger.log(`CORS enabled for: ${frontendOrigins.join(', ')}`);
+  logger.log(`CORS enabled for: ${allowedOrigins.join(', ')}`);
   logger.log(`Backend URL: http://0.0.0.0:${port}`);
   logger.log(`═══════════════════════════════════════════════════════════════`);
 }
