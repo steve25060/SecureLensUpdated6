@@ -8,7 +8,7 @@
     "build:packages": "pnpm --filter @securelens/constants build && pnpm --filter @securelens/findings-schema build && pnpm --filter @securelens/shared-types build && pnpm --filter @securelens/shared-utils build",
     "build:backend": "pnpm build:packages && cd apps/backend && pnpm run build",
     "build:frontend": "pnpm build:packages && cd apps/frontend && pnpm run build",
-    "start:backend": "cd apps/backend && node dist/main.js",
+    "start:backend": "cd apps/backend && npx prisma db push --accept-data-loss && node dist/main.js",
     "start:frontend": "cd apps/frontend && npm run start",
     "dev": "pnpm -r --if-present dev",
     "start": "pnpm -r --if-present start",

@@ -8,8 +8,7 @@ services:
     plan: free
     region: oregon
     buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build:backend
-    preDeployCommand: cd apps/backend && npx prisma db push --accept-data-loss
-    startCommand: pnpm run start:backend
+    startCommand: cd apps/backend && npx prisma db push --accept-data-loss && node dist/main.js
     healthCheckPath: /api/ai-copilot/status
     envVars:
       - key: NODE_ENV
