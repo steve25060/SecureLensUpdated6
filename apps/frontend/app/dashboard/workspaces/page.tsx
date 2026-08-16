@@ -585,10 +585,11 @@ function WorkspaceCard({
   onEdit,
   onScan,
 }: {
+  key?: any;
   ws: Workspace;
-  onDelete: (ws: Workspace) => void;
-  onEdit: (ws: Workspace) => void;
-  onScan: (ws: Workspace) => void;
+  onDelete: (ws: Workspace) => any;
+  onEdit: (ws: Workspace) => any;
+  onScan: (ws: Workspace) => any;
 }) {
   const cfg = typeConfig[ws.type] ?? typeConfig.WEBSITE;
   const Icon = cfg.icon;
