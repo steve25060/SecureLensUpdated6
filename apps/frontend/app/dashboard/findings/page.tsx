@@ -926,7 +926,7 @@ function FindingsContent() {
         {(['ALL', ...Object.keys(severityConfig)] as const).map(key => {
           const sev = key === 'ALL' ? null : severityConfig[key as Severity];
           const Icon = sev?.icon || Shield;
-          const count = key === 'ALL' ? Object.values(severityCounts).reduce((a, b) => a + b, 0) : severityCounts[key as Severity];
+          const count = key === 'ALL' ? Object.values(severityCounts).reduce<number>((a, b) => a + Number(b || 0), 0) : (severityCounts[key as Severity] || 0);
           const isActive = selectedSeverity === key;
           return (
             <motion.button
