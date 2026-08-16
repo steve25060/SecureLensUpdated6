@@ -27,15 +27,32 @@ async function bootstrap() {
 
   const nodeEnv = process.env.NODE_ENV || 'development';
   
-  let frontendOrigins: string[];
-  
-  // Use environment variable for frontend origins, default to localhost
-  frontendOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:3000')
+  const defaultOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://securelens-frontend.onrender.com',
+  ];
+
+  const envOrigins = (process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || process.env.CORS_ORIGIN || '')
     .split(',')
-    .map((url) => url.trim());
+    .map((url) => url.trim())
+    .filter(Boolean);
+
+  const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
 
   app.enableCors({
-    origin: frontendOrigins,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.onrender.com') ||
+        origin.endsWith('.railway.app') ||
+        origin.includes('localhost')
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

@@ -23,6 +23,12 @@ services:
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
+      - key: FRONTEND_URL
+        value: https://securelens-frontend.onrender.com
+      - key: FRONTEND_ORIGIN
+        value: https://securelens-frontend.onrender.com
+      - key: BACKEND_URL
+        value: https://securelens-backend-o213.onrender.com
       - key: GROQ_API_KEY
         sync: false
       - key: OPENROUTER_API_KEY
@@ -48,10 +54,11 @@ services:
       - key: PORT
         value: 3000
       - key: NEXT_PUBLIC_BACKEND_URL
-        fromService:
-          type: web
-          name: securelens-backend
-          property: host
+        value: https://securelens-backend-o213.onrender.com
+      - key: NEXT_PUBLIC_API_URL
+        value: https://securelens-backend-o213.onrender.com/api
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://securelens-frontend.onrender.com
 
 # ============================================================================
 # 3. PostgreSQL Database
