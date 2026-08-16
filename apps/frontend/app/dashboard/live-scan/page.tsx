@@ -966,7 +966,7 @@ function LiveScanContent() {
       mode: 'github',
       profile: scanProfile,
       workspaceId,
-      engines: Array.from(selectedEngines),
+      engines: Array.from<string>(selectedEngines),
       status: 'running',
       progress: 5,
       startedAt: new Date().toISOString(),
@@ -1026,7 +1026,7 @@ function LiveScanContent() {
           id: generatedScanId,
           target: scanTarget,
           type: 'GITHUB',
-          engines: Array.from(selectedEngines),
+          engines: Array.from<string>(selectedEngines),
           score: directScore,
           findings: finalFindings.map(f => ({
             id: f.id,
@@ -1047,7 +1047,7 @@ function LiveScanContent() {
           mode: 'github',
           profile: scanProfile,
           workspaceId,
-          engines: Array.from(selectedEngines),
+          engines: Array.from<string>(selectedEngines),
           status: 'completed',
           progress: 100,
           startedAt: new Date().toISOString(),
@@ -1107,7 +1107,7 @@ function LiveScanContent() {
       mode: 'combined',
       profile: scanProfile,
       workspaceId,
-      engines: Array.from(selectedEngines),
+      engines: Array.from<string>(selectedEngines),
       status: 'running',
       progress: 5,
       startedAt: new Date().toISOString(),
@@ -1168,7 +1168,7 @@ function LiveScanContent() {
           id: generatedScanId,
           target: scanTarget,
           type: 'COMBINED',
-          engines: Array.from(selectedEngines),
+          engines: Array.from<string>(selectedEngines),
           score: combScore,
           findings: combinedResults.map(f => ({
             id: f.id,
@@ -1189,7 +1189,7 @@ function LiveScanContent() {
           mode: 'combined',
           profile: scanProfile,
           workspaceId,
-          engines: Array.from(selectedEngines),
+          engines: Array.from<string>(selectedEngines),
           status: 'completed',
           progress: 100,
           startedAt: new Date().toISOString(),
@@ -1295,7 +1295,7 @@ function LiveScanContent() {
           id: scanId || `demo-scan-${Date.now()}`,
           target: scanTarget,
           type: mode,
-          engines: Array.from(selectedEngines),
+          engines: Array.from<string>(selectedEngines),
           score: demoScore,
           findings: found.map(f => ({
             id: f.id,
@@ -1312,7 +1312,7 @@ function LiveScanContent() {
           mode,
           profile: scanProfile,
           workspaceId,
-          engines: Array.from(selectedEngines),
+          engines: Array.from<string>(selectedEngines),
           status: 'completed',
           progress: 100,
           startedAt: new Date().toISOString(),
@@ -1367,7 +1367,7 @@ function LiveScanContent() {
         target: uploadedFile.name,
         mode: 'github',
         profile: scanProfile,
-        engines: Array.from(selectedEngines),
+        engines: Array.from<string>(selectedEngines),
       }, 'live-scan-page');
       
       runDirectFileScan(uploadedFile.name, uploadedFile.content);
@@ -1384,7 +1384,7 @@ function LiveScanContent() {
         target: pastedFileName || 'snippet.js',
         mode: 'github',
         profile: scanProfile,
-        engines: Array.from(selectedEngines),
+        engines: Array.from<string>(selectedEngines),
       }, 'live-scan-page');
       
       runDirectFileScan(pastedFileName || 'snippet.js', pastedCode);
@@ -1402,7 +1402,7 @@ function LiveScanContent() {
         target: `${targetUrl} + ${uploadedFile.name}`,
         mode: 'combined',
         profile: scanProfile,
-        engines: Array.from(selectedEngines),
+        engines: Array.from<string>(selectedEngines),
       }, 'live-scan-page');
       
       runCombinedDirectFileScan(targetUrl, uploadedFile.name, uploadedFile.content);
@@ -1419,7 +1419,7 @@ function LiveScanContent() {
         target: `${targetUrl} + ${pastedFileName || 'snippet.js'}`,
         mode: 'combined',
         profile: scanProfile,
-        engines: Array.from(selectedEngines),
+        engines: Array.from<string>(selectedEngines),
       }, 'live-scan-page');
       
       runCombinedDirectFileScan(targetUrl, pastedFileName || 'snippet.js', pastedCode);
@@ -1429,7 +1429,7 @@ function LiveScanContent() {
     const scanTarget = mode === 'combined'
       ? ((targetUrl && repoUrl) ? `${targetUrl} + ${repoUrl}` : (targetUrl || repoUrl))
       : (mode === 'github' ? (repoUrl || targetUrl) : (targetUrl || repoUrl));
-    const engineArr = Array.from(selectedEngines);
+    const engineArr = Array.from<string>(selectedEngines);
 
     try {
       if (demoMode) {

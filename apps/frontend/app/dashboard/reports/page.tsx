@@ -232,7 +232,7 @@ export default function ReportsPage() {
     liveScans.forEach(s => s.target && set.add(s.target));
     allAvailableFindings.forEach(f => f.target && set.add(f.target));
     if (set.size === 0) set.add('https://uptoskills.com');
-    return Array.from(set);
+    return Array.from<string>(set);
   }, [liveScans, allAvailableFindings]);
 
   // Combined Active Reports List

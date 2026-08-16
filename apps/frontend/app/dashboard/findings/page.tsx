@@ -571,7 +571,7 @@ function FindingsContent() {
     activeFindings.forEach(f => {
       if (f.category) set.add(f.category);
     });
-    return Array.from(set).sort();
+    return Array.from<string>(set).sort();
   }, [activeFindings]);
 
   // Filtered findings list
