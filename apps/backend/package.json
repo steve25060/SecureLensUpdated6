@@ -5,13 +5,15 @@
   "description": "NestJS backend for SecureLens",
   "main": "dist/main.js",
   "scripts": {
-    "build": "pnpm --filter @securelens/constants build && pnpm --filter @securelens/findings-schema build && pnpm --filter @securelens/shared-types build && pnpm --filter @securelens/shared-utils build && tsc -p tsconfig.json",
+    "build": "pnpm --filter @securelens/constants build && pnpm --filter @securelens/findings-schema build && pnpm --filter @securelens/shared-types build && pnpm --filter @securelens/shared-utils build && prisma generate && tsc -p tsconfig.json",
     "dev": "node start-dev-node.js",
     "dev:backend-only": "ts-node -r dotenv/config src/main.ts dotenv_config_path=../../.env",
     "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
     "dev:with-services": "./start-dev.sh",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
+    "prisma:deploy": "prisma db push",
     "prisma:seed": "ts-node -r dotenv/config prisma/seed.ts"
   },
   "dependencies": {

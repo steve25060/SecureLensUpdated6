@@ -35,6 +35,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'localhost' },
       { protocol: 'http', hostname: '*.railway.internal' },
       { protocol: 'https', hostname: '*.railway.app' },
+      { protocol: 'https', hostname: '*.onrender.com' },
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],

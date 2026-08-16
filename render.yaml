@@ -1,0 +1,62 @@
+services:
+  # ============================================================================
+  # 1. NestJS Backend API Service
+  # ============================================================================
+  - type: web
+    name: securelens-backend
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build:backend
+    preDeployCommand: cd apps/backend && npx prisma db push --accept-data-loss
+    startCommand: pnpm run start:backend
+    healthCheckPath: /api/ai-copilot/status
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: securelens-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # ============================================================================
+  # 2. Next.js Frontend Application
+  # ============================================================================
+  - type: web
+    name: securelens-frontend
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build:frontend
+    startCommand: pnpm run start:frontend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: NEXT_PUBLIC_BACKEND_URL
+        fromService:
+          type: web
+          name: securelens-backend
+          property: host
+
+# ============================================================================
+# 3. PostgreSQL Database
+# ============================================================================
+databases:
+  - name: securelens-db
+    databaseName: securelens
+    user: securelens
+    plan: free
+    region: oregon
+    ipAllowList: []
