@@ -381,30 +381,53 @@ function SmoothProgress({ value, status }: { value: number; status: ScanStatusVa
 
   const barClass =
     status === 'failed'
-      ? 'bg-red-500'
+      ? 'from-red-600 to-rose-500 shadow-red-500/50'
       : status === 'cancelled'
-      ? 'bg-gray-500'
-      : 'bg-gradient-to-r from-violet-600 to-violet-500';
+      ? 'from-gray-600 to-slate-500 shadow-gray-500/50'
+      : status === 'completed'
+      ? 'from-emerald-500 via-teal-400 to-cyan-400 shadow-emerald-500/50'
+      : 'from-violet-600 via-indigo-500 to-cyan-400 shadow-violet-500/50';
 
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-gray-500">Progress</p>
-      <div className="w-full bg-white/[0.04] rounded-full h-2.5 overflow-hidden relative">
+    <div className="space-y-2.5 p-3.5 rounded-2xl bg-[#0f1019] border border-white/10 shadow-lg shadow-black/30">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Activity size={14} className={isActive ? 'text-violet-400 animate-pulse' : isDone ? 'text-emerald-400' : 'text-gray-400'} />
+          <span className="text-xs font-semibold uppercase tracking-wider text-gray-200">Scan Progress</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {isActive && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 animate-pulse">
+              ANALYZING
+            </span>
+          )}
+          {isDone && (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              COMPLETE
+            </span>
+          )}
+          <span className="text-base font-black text-white tabular-nums tracking-tight font-mono">
+            {display}%
+          </span>
+        </div>
+      </div>
+
+      {/* High-visibility Glowing Progress Bar */}
+      <div className="w-full bg-[#080910] rounded-full h-4 p-0.5 border border-white/20 shadow-inner overflow-hidden relative">
         <div
-          style={{ width: `${barWidth}%` }}
-          className={`h-full rounded-full ${barClass} relative overflow-hidden transition-none`}
+          style={{ width: `${Math.max(barWidth, isActive || isDone ? 2 : 0)}%` }}
+          className={`h-full rounded-full bg-gradient-to-r ${barClass} relative overflow-hidden transition-all duration-150 shadow-md`}
         >
-          {/* moving shimmer while the scan is actively running */}
+          {/* Moving shimmer light wave while active */}
           {isActive && (
             <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
               animate={{ x: ['-100%', '200%'] }}
-              transition={{ duration: 1.4, ease: 'easeInOut', repeat: Infinity }}
+              transition={{ duration: 1.2, ease: 'linear', repeat: Infinity }}
             />
           )}
         </div>
       </div>
-      <p className="text-sm font-semibold text-white tabular-nums">{display}%</p>
     </div>
   );
 }
@@ -1598,25 +1621,77 @@ function LiveScanContent() {
           <motion.div variants={itemVariants} className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-6 space-y-5">
             <h2 className="text-lg font-semibold text-white">Configure Scan</h2>
 
-            {/* Workspace picker */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-gray-300">Workspace</label>
-                <Link href="/dashboard/workspaces" className="text-xs text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1">
+            {/* Workspace picker with High-Contrast selector and quick switcher */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-gray-200 flex items-center gap-1.5">
+                  <Database size={15} className="text-violet-400" />
+                  Target Workspace
+                </label>
+                <Link href="/dashboard/workspaces" className="text-xs font-semibold text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1">
                   Manage Workspaces →
                 </Link>
               </div>
+
+              {/* Quick Workspace Switcher Chips */}
+              {workspaces.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  {workspaces.map(w => {
+                    const isSelected = w.id === workspaceId;
+                    return (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => handleWorkspaceSelect(w.id)}
+                        disabled={isExecuting}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-2 shrink-0 cursor-pointer disabled:opacity-50 ${
+                          isSelected
+                            ? 'bg-violet-600 text-white border-violet-400 shadow-md shadow-violet-600/30 ring-2 ring-violet-500/40'
+                            : 'bg-[#151622] text-gray-300 border-white/10 hover:border-violet-500/40 hover:bg-white/[0.06] hover:text-white'
+                        }`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white animate-pulse' : 'bg-violet-400'}`} />
+                        <span className="truncate max-w-[160px]">{w.name}</span>
+                        {isSelected && <Check size={13} className="text-white" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Enhanced High-Contrast Dropdown */}
               <div className="relative">
-                <Database size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
-                <select value={workspaceId} onChange={e => handleWorkspaceSelect(e.target.value)} disabled={isExecuting}
-                  className="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg pl-10 pr-10 py-2.5 text-white text-sm focus:outline-none focus:border-violet-500/50 disabled:opacity-50 transition-colors appearance-none cursor-pointer">
-                  <option value="">Select a workspace…</option>
-                  {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                <Database size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-violet-400 pointer-events-none z-10" />
+                <select
+                  value={workspaceId}
+                  onChange={e => handleWorkspaceSelect(e.target.value)}
+                  disabled={isExecuting}
+                  className="w-full bg-[#151624] border-2 border-violet-500/40 hover:border-violet-400 focus:border-violet-400 rounded-xl pl-10 pr-10 py-3 text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-violet-500/30 disabled:opacity-50 transition-all appearance-none cursor-pointer shadow-lg shadow-black/40"
+                >
+                  <option value="" className="bg-[#151624] text-gray-400 py-2">Select a workspace…</option>
+                  {workspaces.map(w => (
+                    <option key={w.id} value={w.id} className="bg-[#151624] text-white py-2 font-medium">
+                      {w.name} {w.targetUrl ? `(${w.targetUrl})` : w.repoUrl ? `(${w.repoUrl})` : ''}
+                    </option>
+                  ))}
                 </select>
-                <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                <ChevronDown size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-violet-400 pointer-events-none z-10" />
               </div>
+
               {selectedWorkspace && (
-                <p className="text-xs text-gray-500 mt-1.5">{selectedWorkspace.targetUrl || selectedWorkspace.repoUrl || 'No target configured'}</p>
+                <div className="p-3 rounded-xl bg-violet-950/30 border border-violet-500/30 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-violet-500/30 text-violet-200 font-bold uppercase text-[10px] border border-violet-500/40">
+                      {selectedWorkspace.type || 'WEBSITE'}
+                    </span>
+                    <span className="text-gray-200 font-medium font-mono truncate max-w-[320px]">
+                      {selectedWorkspace.targetUrl || selectedWorkspace.repoUrl || 'No target configured'}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                    <Check size={12} /> Active Target
+                  </span>
+                </div>
               )}
             </div>
 
