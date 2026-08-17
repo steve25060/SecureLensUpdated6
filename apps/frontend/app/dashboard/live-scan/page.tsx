@@ -195,18 +195,20 @@ function auditDirectCodeFile(fileName: string, content: string): CodeAuditFindin
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function ToastStack({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: number) => void }) {
   return (
-    <div className="fixed bottom-6 right-6 z-[60] space-y-2 pointer-events-none">
+    <div className="fixed bottom-6 right-6 z-[60] space-y-2.5 pointer-events-none">
       <AnimatePresence>
         {toasts.map(t => (
           <motion.div key={t.id} initial={{ opacity: 0, x: 40, scale: 0.9 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: 40, scale: 0.9 }}
-            className={`pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl backdrop-blur-xl text-sm font-medium ${
-              t.type === 'success' ? 'bg-green-500/10 border-green-500/30 text-green-300'
-              : t.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-300'
-              : 'bg-violet-500/10 border-violet-500/30 text-violet-300'
+            className={`pointer-events-auto flex items-center gap-3 px-4 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-2xl text-xs font-semibold ${
+              t.type === 'success' ? 'bg-[#0b1615]/95 border-emerald-500/40 text-emerald-300 shadow-emerald-950/40'
+              : t.type === 'error' ? 'bg-[#1a1215]/95 border-rose-500/40 text-rose-200 shadow-rose-950/40'
+              : 'bg-[#151222]/95 border-violet-500/40 text-violet-200 shadow-violet-950/40'
             }`}>
-            {t.type === 'success' ? <Check size={15} /> : t.type === 'error' ? <X size={15} /> : <AlertCircle size={15} />}
-            <span>{t.message}</span>
-            <button onClick={() => onDismiss(t.id)} className="ml-2 opacity-60 hover:opacity-100"><X size={13} /></button>
+            <div className={`p-1 rounded-lg ${t.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : t.type === 'error' ? 'bg-rose-500/20 text-rose-400' : 'bg-violet-500/20 text-violet-400'}`}>
+              {t.type === 'success' ? <Check size={14} /> : t.type === 'error' ? <X size={14} /> : <AlertCircle size={14} />}
+            </div>
+            <span className="leading-snug">{t.message}</span>
+            <button onClick={() => onDismiss(t.id)} className="ml-2 opacity-50 hover:opacity-100 p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer"><X size={12} /></button>
           </motion.div>
         ))}
       </AnimatePresence>

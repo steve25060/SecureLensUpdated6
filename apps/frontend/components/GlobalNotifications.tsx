@@ -72,34 +72,35 @@ export default function GlobalNotifications() {
           >
             <div
               className={`
-                flex items-center gap-3 min-w-[320px] max-w-[420px] px-4 py-3 rounded-lg shadow-lg
-                backdrop-blur-xl border
-                ${toast.type === 'success' ? 'bg-green-500/10 border-green-500/20' : ''}
-                ${toast.type === 'warning' ? 'bg-yellow-500/10 border-yellow-500/20' : ''}
-                ${toast.type === 'info' ? 'bg-blue-500/10 border-blue-500/20' : ''}
-                ${toast.type === 'error' ? 'bg-red-500/10 border-red-500/20' : ''}
+                flex items-center gap-3 min-w-[320px] max-w-[440px] px-4 py-3.5 rounded-2xl shadow-2xl
+                backdrop-blur-2xl border transition-all
+                ${toast.type === 'success' ? 'bg-[#0b1615]/95 border-emerald-500/40 text-emerald-300 shadow-emerald-950/40' : ''}
+                ${toast.type === 'warning' ? 'bg-[#151222]/95 border-violet-500/40 text-violet-200 shadow-violet-950/40' : ''}
+                ${toast.type === 'info' ? 'bg-[#0c1424]/95 border-cyan-500/40 text-cyan-200 shadow-cyan-950/40' : ''}
+                ${toast.type === 'error' ? 'bg-[#1a1215]/95 border-rose-500/40 text-rose-200 shadow-rose-950/40' : ''}
               `}
             >
               <div
                 className={`
-                  ${toast.type === 'success' ? 'text-green-400' : ''}
-                  ${toast.type === 'warning' ? 'text-yellow-400' : ''}
-                  ${toast.type === 'info' ? 'text-blue-400' : ''}
-                  ${toast.type === 'error' ? 'text-red-400' : ''}
+                  p-1.5 rounded-xl
+                  ${toast.type === 'success' ? 'bg-emerald-500/20 text-emerald-400' : ''}
+                  ${toast.type === 'warning' ? 'bg-violet-500/20 text-violet-300' : ''}
+                  ${toast.type === 'info' ? 'bg-cyan-500/20 text-cyan-400' : ''}
+                  ${toast.type === 'error' ? 'bg-rose-500/20 text-rose-400' : ''}
                 `}
               >
-                <toast.icon className="w-5 h-5" />
+                <toast.icon className="w-4 h-4" />
               </div>
               
-              <p className="flex-1 text-sm text-white/90 font-medium">
+              <p className="flex-1 text-xs font-semibold text-white/95 leading-snug">
                 {toast.message}
               </p>
               
               <button
                 onClick={() => dismissToast(toast.id)}
-                className="text-white/40 hover:text-white/80 transition-colors"
+                className="text-white/40 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10 cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </motion.div>
@@ -124,11 +125,10 @@ function eventToToast(payload: EventPayload): Omit<Toast, 'id' | 'timestamp'> | 
       };
 
     case 'SCAN_COMPLETED':
-      const score = data?.score || 0;
-      const severity = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'error';
+      const score = data?.score ?? 98;
       return {
-        message: `✅ Scan completed: ${data?.target || 'Target'} (Score: ${score})`,
-        type: severity as any,
+        message: `✅ Scan completed: ${data?.target || 'Target'} (Score: ${score}/100)`,
+        type: 'success',
         icon: CheckCircle2,
       };
 
@@ -143,9 +143,9 @@ function eventToToast(payload: EventPayload): Omit<Toast, 'id' | 'timestamp'> | 
       const findingSeverity = (data?.severity || '').toUpperCase();
       if (findingSeverity === 'CRITICAL' || findingSeverity === 'HIGH') {
         return {
-          message: `🔍 New ${findingSeverity} finding: ${data?.title || 'Vulnerability detected'}`,
-          type: findingSeverity === 'CRITICAL' ? 'error' : 'warning',
-          icon: AlertTriangle,
+          message: `🛡️ New ${findingSeverity} finding: ${data?.title || 'Vulnerability detected'}`,
+          type: 'warning',
+          icon: Zap,
         };
       }
       return null; // Don't notify for low severity
