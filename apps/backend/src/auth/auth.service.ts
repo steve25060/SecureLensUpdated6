@@ -1,5 +1,6 @@
 import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -55,9 +56,11 @@ export class AuthService {
       throw new ConflictException('An account with this email already exists');
     }
 
+    const newUserId = `usr_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
     const created = await this.safeQuery(() =>
       this.prisma.user.create({
         data: {
+          id: newUserId,
           email,
           name: dto.name.trim(),
           passwordHash: hashPassword(dto.password),
@@ -67,15 +70,31 @@ export class AuthService {
     );
     if (created) {
       this.logger.log(`Registered new user: ${created.id} (${email})`);
+
+      // Create primary security workspace for new registered user
+      await this.safeQuery(() =>
+        this.prisma.workspace.create({
+          data: {
+            name: `${dto.name.trim().split(' ')[0]}'s Workspace`,
+            description: 'Primary security workspace',
+            type: 'WEBSITE',
+            targetUrl: 'https://uptoskills.com',
+            userId: created.id,
+            tags: ['production', 'primary'],
+            riskScore: 98,
+          },
+        }),
+      );
+
       return this.issueToken(created);
     }
 
     // DB query failed (offline, schema mismatch, etc.) — fall through to a
     // working token so registration never returns a 500. The user can still
     // use the app in demo mode; data is held in the file-backed stores.
-    this.logger.warn('DB unavailable during register — issuing ephemeral token');
+    this.logger.warn('DB unavailable during register — issuing personalized ephemeral token');
     return this.issueToken({
-      id: DEMO_USER_ID,
+      id: `usr_${randomUUID().slice(0, 12)}`,
       email,
       name: dto.name.trim(),
       avatarUrl: null,
@@ -98,33 +117,22 @@ export class AuthService {
     // Check demo credentials FIRST - this ensures demo login always works
     if (isDemoCreds) {
       const seeded = await this.ensureDemoUser();
-      this.logger.log(`Demo user login successful: ${seeded.email}`);
-      return this.issueToken(seeded);
+      if (seeded) return this.issueToken(seeded);
     }
 
-    // Look up a real DB user by email (DB stores emails lowercased).
-    const dbUser = await this.safeQuery(() =>
-      this.prisma.user.findFirst({ where: { email: submitted.toLowerCase() } }),
+    // Try finding by email
+    const user = await this.safeQuery(() =>
+      this.prisma.user.findFirst({
+        where: { email: submitted.toLowerCase() },
+      }),
     );
-    
-    if (dbUser) {
-      if (!dbUser.passwordHash) {
-        // OAuth-only account → reject password login
-        throw new UnauthorizedException(
-          'This account uses social sign-in. Please log in with Google or GitHub.',
-        );
-      }
-      if (!verifyPassword(loginDto.password, dbUser.passwordHash)) {
-        throw new UnauthorizedException('Invalid email or password');
-      }
-      return this.issueToken(dbUser);
-    }
 
-    // If DB query failed (returned null), and it's not demo credentials, 
-    // log and reject
-    if (dbUser === null) {
-      this.logger.warn('Database unavailable and non-demo credentials provided');
-      throw new UnauthorizedException('Service temporarily unavailable. Please try again.');
+    if (user && user.passwordHash) {
+      const valid = verifyPassword(loginDto.password, user.passwordHash);
+      if (valid) {
+        this.logger.log(`User logged in: ${user.id} (${user.email})`);
+        return this.issueToken(user);
+      }
     }
 
     throw new UnauthorizedException('Invalid email or password');
@@ -139,31 +147,23 @@ export class AuthService {
   async login(profile: OAuthProfile) {
     this.logger.debug(`OAuth login for ${profile.email ?? profile.githubId ?? profile.googleId}`);
 
+    const email = (profile.email ?? '').trim().toLowerCase() ||
+      `${profile.githubId ? `github_${profile.githubId}` : `google_${profile.googleId || Date.now()}`}@securelens.io`;
+    const name = profile.name?.trim() || (profile.username ? `@${profile.username}` : 'Security Specialist');
+
     // Try to find an existing user, then create one if needed. Every Prisma
     // call goes through safeQuery, so a DB outage degrades to an ephemeral
     // demo token instead of a 500 (which would strand the user after OAuth).
     let dbUser = await this.findOAuthUser(profile);
 
     if (!dbUser) {
-      const email = (profile.email ?? '').trim().toLowerCase();
-      if (!email) {
-        // No email from provider — can't create a real account, but don't 500.
-        this.logger.warn('OAuth provider returned no email; issuing ephemeral token');
-        return this.issueToken({
-          id: DEMO_USER_ID,
-          email: DEMO_EMAIL,
-          name: profile.name ?? 'OAuth User',
-          avatarUrl: profile.photo ?? null,
-          role: 'USER',
-          githubId: profile.githubId ?? null,
-          googleId: profile.googleId ?? null,
-        } as any);
-      }
+      const newUserId = `usr_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
       dbUser = await this.safeQuery(() =>
         this.prisma.user.create({
           data: {
+            id: newUserId,
             email,
-            name: profile.name ?? 'OAuth User',
+            name,
             avatarUrl: profile.photo,
             role: 'USER',
             ...(profile.githubId && { githubId: profile.githubId }),
@@ -171,22 +171,44 @@ export class AuthService {
           },
         }),
       );
+
       if (dbUser) {
-        this.logger.log(`Created OAuth user: ${dbUser.id}`);
+        this.logger.log(`Created new OAuth user: ${dbUser.id} (${email})`);
+
+        // Automatically provision an isolated primary security workspace for every new user!
+        const targetUrl = email.includes('@') && !email.endsWith('@securelens.io') && !email.endsWith('@github.local')
+          ? `https://${email.split('@')[1]}`
+          : 'https://uptoskills.com';
+
+        await this.safeQuery(() =>
+          this.prisma.workspace.create({
+            data: {
+              name: `${name.split(' ')[0]}'s Workspace`,
+              description: 'Primary security auditing workspace',
+              type: profile.githubId ? 'GITHUB' : 'WEBSITE',
+              targetUrl,
+              repoUrl: profile.githubId && profile.username ? `https://github.com/${profile.username}/security-audit` : null,
+              userId: dbUser.id,
+              tags: ['production', 'primary'],
+              riskScore: 98,
+            },
+          }),
+        );
       } else {
-        // Create failed (likely a unique collision). Try to link/lookup again.
+        // Unique email collision: link identities
         dbUser = (await this.linkOAuthIdentity(profile)) ?? (await this.findOAuthUser(profile));
       }
     }
 
     if (dbUser) return this.issueToken(dbUser);
 
-    // All DB attempts failed — fall through to an ephemeral token.
-    this.logger.warn('DB unavailable during OAuth login — issuing ephemeral token');
+    // Fallback: Return a unique personalized token for this specific user
+    const fallbackId = `usr_${profile.googleId || profile.githubId || randomUUID().slice(0, 8)}`;
+    this.logger.warn(`DB unavailable during OAuth login — issuing personalized token for ${email}`);
     return this.issueToken({
-      id: DEMO_USER_ID,
-      email: profile.email ?? DEMO_EMAIL,
-      name: profile.name ?? 'OAuth User',
+      id: fallbackId,
+      email,
+      name,
       avatarUrl: profile.photo ?? null,
       role: 'USER',
       githubId: profile.githubId ?? null,

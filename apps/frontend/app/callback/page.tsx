@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Shield, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { hydrateUserScanStorage } from '@/lib/live-scan-store';
 
 function CallbackContent() {
   const router = useRouter();
@@ -27,6 +28,7 @@ function CallbackContent() {
     if (token) {
       // Store token
       localStorage.setItem('access_token', token);
+      localStorage.setItem('sl_token', token);
 
       try {
         // Decode JWT payload
@@ -53,6 +55,11 @@ function CallbackContent() {
           localStorage.setItem('user', JSON.stringify(userObj));
           if (userObj.email) localStorage.setItem('user_email', userObj.email);
           if (userObj.name) localStorage.setItem('user_name', userObj.name);
+
+          // Hydrate user-scoped scans and finding results for this new profile
+          if (userObj.email) {
+            hydrateUserScanStorage(userObj.email);
+          }
 
           if (provider === 'google') {
             localStorage.setItem(

@@ -17,6 +17,9 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
       callbackURL,
       scope: ['user:email'],
       userProfileURL: 'https://api.github.com/user',
+      customHeaders: {
+        'User-Agent': 'SecureLens-OAuth-App',
+      },
     });
     
     if (!clientID || !clientSecret || clientID === 'placeholder') {
@@ -26,14 +29,24 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
     }
   }
 
-  validate(accessToken: string, refreshToken: string, profile: any, done: any) {
-    const user = {
-      githubId: String(profile.id),
-      username: profile.username,
-      email: profile.emails?.[0]?.value || profile.email || `${profile.username}@github.local`,
-      name: profile.displayName || profile.name || profile.username || 'GitHub User',
-      photo: profile.photos?.[0]?.value || profile.avatar_url,
-    };
-    done(null, user);
+  async validate(accessToken: string, refreshToken: string, profile: any, done: any) {
+    try {
+      const email =
+        profile.emails?.[0]?.value ||
+        profile._json?.email ||
+        `${profile.username || profile.id}@users.noreply.github.com`;
+
+      const user = {
+        githubId: String(profile.id),
+        username: profile.username || `github_user_${profile.id}`,
+        email: email.trim().toLowerCase(),
+        name: profile.displayName || profile.name || profile.username || 'GitHub Security Engineer',
+        photo: profile.photos?.[0]?.value || profile._json?.avatar_url || profile.avatar_url || null,
+        accessToken,
+      };
+      done(null, user);
+    } catch (err) {
+      done(err, null);
+    }
   }
 }

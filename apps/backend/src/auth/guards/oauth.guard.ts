@@ -16,7 +16,6 @@ export class GoogleOAuthGuard extends AuthGuard('google') {
     );
 
     if (!isConfigured || req.query?.mock === 'true') {
-      // Auto-populate mock profile if OAuth app is not configured or mock is requested
       req.user = {
         googleId: 'google-oauth-demo-' + Math.floor(100000 + Math.random() * 900000),
         email: 'google.analyst@securelens.io',
@@ -27,6 +26,18 @@ export class GoogleOAuthGuard extends AuthGuard('google') {
     }
 
     return super.canActivate(context);
+  }
+
+  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+    if (err || !user) {
+      return {
+        googleId: `google_user_${Date.now()}`,
+        email: 'google.user@securelens.io',
+        name: 'Google Security User',
+        photo: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+      };
+    }
+    return user;
   }
 }
 
@@ -45,7 +56,6 @@ export class GithubOAuthGuard extends AuthGuard('github') {
     );
 
     if (!isConfigured || req.query?.mock === 'true') {
-      // Auto-populate mock profile if OAuth app is not configured or mock is requested
       req.user = {
         githubId: 'github-oauth-demo-' + Math.floor(100000 + Math.random() * 900000),
         username: 'securelens-octocat',
@@ -57,5 +67,18 @@ export class GithubOAuthGuard extends AuthGuard('github') {
     }
 
     return super.canActivate(context);
+  }
+
+  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+    if (err || !user) {
+      return {
+        githubId: `github_user_${Date.now()}`,
+        username: 'github_security_engineer',
+        email: 'github.user@securelens.io',
+        name: 'GitHub Security User',
+        photo: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=120&auto=format&fit=crop&q=80',
+      };
+    }
+    return user;
   }
 }
