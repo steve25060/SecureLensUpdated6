@@ -324,15 +324,24 @@ export class WorkspacesService {
       if (scans.length > 0 && scans[0].riskScore && scans[0].riskScore > 0) {
         score = scans[0].riskScore;
       } else if (activeFindings.length > 0) {
-        let deduction = 0;
+        let critCount = 0;
+        let highCount = 0;
+        let medCount = 0;
+        let lowCount = 0;
         activeFindings.forEach((f: any) => {
           const sev = String(f.severity).toUpperCase();
-          if (sev === 'CRITICAL') deduction += 20;
-          else if (sev === 'HIGH') deduction += 12;
-          else if (sev === 'MEDIUM') deduction += 5;
-          else if (sev === 'LOW') deduction += 2;
+          if (sev === 'CRITICAL') critCount++;
+          else if (sev === 'HIGH') highCount++;
+          else if (sev === 'MEDIUM') medCount++;
+          else if (sev === 'LOW') lowCount++;
         });
-        score = Math.max(15, Math.min(100, 100 - deduction));
+        let critD = 0; for (let i = 0; i < critCount; i++) critD += 14 * Math.pow(0.85, i);
+        let highD = 0; for (let i = 0; i < highCount; i++) highD += 7.5 * Math.pow(0.88, i);
+        let medD = 0; for (let i = 0; i < medCount; i++) medD += 3.2 * Math.pow(0.90, i);
+        let lowD = 0; for (let i = 0; i < lowCount; i++) lowD += 1.0 * Math.pow(0.92, i);
+        const totalD = critD + highD + medD + lowD;
+        const damped = Math.min(88, totalD * (100 / (100 + totalD * 0.15)));
+        score = Math.max(15, Math.min(99, Math.round(100 - damped)));
       } else if (scans.length > 0) {
         score = 88;
       } else {

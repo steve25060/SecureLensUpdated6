@@ -66,6 +66,16 @@ export class ScansService {
     };
   }
 
+  private calculateDynamicScore(findingsCount: number, severities?: (Severity | string)[]): number {
+    if (findingsCount <= 0 && (!severities || severities.length === 0)) return 98;
+    if (severities && severities.length > 0) {
+      return this.executor.computeRiskScore(severities as Severity[]);
+    }
+    // Sub-linear decay based on count
+    const deduction = Math.min(85, findingsCount * 4.2 * (100 / (100 + findingsCount * 2.8)));
+    return Math.max(15, Math.min(99, Math.round(100 - deduction)));
+  }
+
   // ─── queries ────────────────────────────────────────────────────────────────
 
   async findAll(userId: string) {
@@ -79,7 +89,7 @@ export class ScansService {
         return rows.map(s => {
           let score = s.riskScore;
           if (score === null || score === undefined || score === 0 || ((s.findingsCount || 0) > 0 && score >= 98)) {
-            score = Math.max(15, Math.min(99, 100 - ((s.findingsCount || 0) * 8)));
+            score = this.calculateDynamicScore(s.findingsCount || 0);
           }
           return { ...s, riskScore: score };
         });
@@ -90,7 +100,7 @@ export class ScansService {
     return this.fileStore().filter(s => !userId || s.userId === userId || s.userId === 'demo-user-1').map(s => {
       let score = s.riskScore;
       if (score === null || score === undefined || score === 0 || ((s.findingsCount || 0) > 0 && score >= 98)) {
-        score = Math.max(15, Math.min(99, 100 - ((s.findingsCount || 0) * 8)));
+        score = this.calculateDynamicScore(s.findingsCount || 0);
       }
       return { ...s, riskScore: score };
     });
@@ -103,7 +113,7 @@ export class ScansService {
         if (scan) {
           let score = scan.riskScore;
           if (score === null || score === undefined || score === 0 || ((scan.findingsCount || 0) > 0 && scan.riskScore >= 98)) {
-            score = Math.max(15, Math.min(99, 100 - ((scan.findingsCount || 0) * 8)));
+            score = this.calculateDynamicScore(scan.findingsCount || 0);
           }
           return { ...scan, riskScore: score };
         }
@@ -115,7 +125,7 @@ export class ScansService {
     if (!rec) throw new NotFoundException(`Scan not found: ${id}`);
     let score = rec.riskScore;
     if (score === null || score === undefined || score === 0 || ((rec.findingsCount || 0) > 0 && score >= 98)) {
-      score = Math.max(15, Math.min(99, 100 - ((rec.findingsCount || 0) * 8)));
+      score = this.calculateDynamicScore(rec.findingsCount || 0);
     }
     return { ...rec, riskScore: score };
   }
@@ -176,23 +186,10 @@ export class ScansService {
       }
     }
 
-    if (findings.length > 0 || (scan.findingsCount || 0) > 0) {
-      let deduction = 0;
-      findings.forEach(f => {
-        const sev = String(f.severity).toUpperCase();
-        if (sev === 'CRITICAL') deduction += 25;
-        else if (sev === 'HIGH') deduction += 14;
-        else if (sev === 'MEDIUM') deduction += 7;
-        else if (sev === 'LOW') deduction += 3;
-        else if (sev === 'INFO') deduction += 0.5;
-      });
-      if (deduction > 0) {
-        riskScore = Math.max(12, Math.min(99, Math.round(100 - deduction)));
-      } else {
-        riskScore = 98;
-      }
+    if (findings.length > 0) {
+      riskScore = this.executor.computeRiskScore(findings.map(f => f.severity as any));
     } else if (riskScore === null || riskScore === undefined || riskScore === 0) {
-      riskScore = 98;
+      riskScore = this.calculateDynamicScore(scan.findingsCount || 0);
     }
     
     return {
@@ -227,7 +224,7 @@ export class ScansService {
         return rows.map(s => {
           let score = s.riskScore;
           if (score === null || score === undefined || score === 0) {
-            score = Math.max(15, 100 - ((s.findingsCount || 0) * 6));
+            score = this.calculateDynamicScore(s.findingsCount || 0);
           }
           return { ...s, riskScore: score };
         });
@@ -238,7 +235,7 @@ export class ScansService {
     return this.fileStore().filter(s => s.workspaceId === workspaceId).map(s => {
       let score = s.riskScore;
       if (score === null || score === undefined || score === 0) {
-        score = Math.max(15, 100 - ((s.findingsCount || 0) * 6));
+        score = this.calculateDynamicScore(s.findingsCount || 0);
       }
       return { ...s, riskScore: score };
     });

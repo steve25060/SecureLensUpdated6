@@ -250,7 +250,7 @@ export default function ReportsPage() {
         const id = `rep-live-${ls.id}`;
         if (!reportMap.has(id)) {
           const scanFindings = allAvailableFindings.filter(f => f.scanId === ls.id || (f.target && ls.target && f.target.toLowerCase().includes(ls.target.toLowerCase())));
-          const score = ls.score ?? (scanFindings.length === 0 ? 98 : calculateSecurityScore(scanFindings));
+          const score = (ls.score && ls.score !== 15) ? ls.score : (scanFindings.length === 0 ? 98 : calculateSecurityScore(scanFindings));
 
           reportMap.set(id, {
             id,

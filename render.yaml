@@ -35,6 +35,18 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        value: https://securelens-backend-o213.onrender.com/api/auth/google/callback
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CALLBACK_URL
+        value: https://securelens-backend-o213.onrender.com/api/auth/github/callback
 
   # ============================================================================
   # 2. Next.js Frontend Application

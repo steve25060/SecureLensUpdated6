@@ -163,7 +163,7 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
   };
 
   const handleLiveRedirect = (provider: "google" | "github") => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://securelens-backend-o213.onrender.com";
     window.location.href = `${backendUrl}/api/auth/${provider}`;
   };
 
@@ -176,7 +176,7 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
         <button
           type="button"
           id="btn-oauth-github"
-          onClick={() => (onGitHub ? onGitHub() : setShowGitHubModal(true))}
+          onClick={() => (onGitHub ? onGitHub() : handleLiveRedirect("github"))}
           className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs sm:text-sm font-medium text-white transition duration-200 hover:-translate-y-0.5 hover:border-violet-400/30 hover:bg-white/[0.08] active:translate-y-0 disabled:opacity-50 shadow-sm cursor-pointer"
         >
           <GitHubIcon className="h-4 w-4 text-white shrink-0" />
@@ -186,11 +186,29 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
         <button
           type="button"
           id="btn-oauth-google"
-          onClick={() => (onGoogle ? onGoogle() : setShowGoogleModal(true))}
+          onClick={() => (onGoogle ? onGoogle() : handleLiveRedirect("google"))}
           className="flex w-full items-center justify-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs sm:text-sm font-medium text-white transition duration-200 hover:-translate-y-0.5 hover:border-violet-400/30 hover:bg-white/[0.08] active:translate-y-0 disabled:opacity-50 shadow-sm cursor-pointer"
         >
           <GoogleIcon className="h-4 w-4 shrink-0" />
           <span>{googleLabel}</span>
+        </button>
+      </div>
+
+      <div className="flex items-center justify-center gap-2 text-[11px] text-gray-500 pt-0.5">
+        <button
+          type="button"
+          onClick={() => setShowGoogleModal(true)}
+          className="hover:text-violet-300 transition-colors cursor-pointer"
+        >
+          Demo Google Account
+        </button>
+        <span>•</span>
+        <button
+          type="button"
+          onClick={() => setShowGitHubModal(true)}
+          className="hover:text-violet-300 transition-colors cursor-pointer"
+        >
+          Demo GitHub Account
         </button>
       </div>
 

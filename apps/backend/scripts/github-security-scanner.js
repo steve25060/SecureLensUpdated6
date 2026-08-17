@@ -19,6 +19,27 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+function calculateDevSecOpsScore(findings) {
+  if (!findings || findings.length === 0) return 98;
+  let critCount = 0, highCount = 0, medCount = 0, lowCount = 0, infoCount = 0;
+  findings.forEach(f => {
+    const sev = (f.severity || '').toUpperCase();
+    if (sev === 'CRITICAL') critCount++;
+    else if (sev === 'HIGH') highCount++;
+    else if (sev === 'MEDIUM') medCount++;
+    else if (sev === 'LOW') lowCount++;
+    else infoCount++;
+  });
+  let critD = 0; for (let i = 0; i < critCount; i++) critD += 14 * Math.pow(0.85, i);
+  let highD = 0; for (let i = 0; i < highCount; i++) highD += 7.5 * Math.pow(0.88, i);
+  let medD = 0; for (let i = 0; i < medCount; i++) medD += 3.2 * Math.pow(0.90, i);
+  let lowD = 0; for (let i = 0; i < lowCount; i++) lowD += 1.0 * Math.pow(0.92, i);
+  const infoD = Math.min(3, infoCount * 0.2);
+  const totalD = critD + highD + medD + lowD + infoD;
+  const damped = Math.min(88, totalD * (100 / (100 + totalD * 0.15)));
+  return Math.max(12, Math.min(99, Math.round(100 - damped)));
+}
+
 // ============================================================================
 // CVE / VULNERABILITY DATABASE FOR DEPENDENCY SCANNING (TRIVY SCA ENGINE)
 // ============================================================================
@@ -980,15 +1001,7 @@ async function runGitHubScan(targetRepo, engineFilter = 'all') {
     }
     const deduplicatedFindings = Array.from(uniqueMap.values());
 
-    // Calculate Unified Repository Security Score (100 - weighted severity impact)
-    let deduction = 0;
-    deduplicatedFindings.forEach(f => {
-      if (f.severity === 'CRITICAL') deduction += 20;
-      else if (f.severity === 'HIGH') deduction += 12;
-      else if (f.severity === 'MEDIUM') deduction += 5;
-      else if (f.severity === 'LOW') deduction += 2;
-    });
-    const finalRiskScore = deduplicatedFindings.length === 0 ? 98 : Math.max(15, Math.min(100, 100 - deduction));
+    const finalRiskScore = calculateDevSecOpsScore(deduplicatedFindings);
 
     addLog('success', 'security_intelligence', `Security Intelligence Engine completed (${attackPathsCreated} composite attack paths correlated, security score: ${finalRiskScore}/100)`);
 
@@ -996,15 +1009,7 @@ async function runGitHubScan(targetRepo, engineFilter = 'all') {
     allFindings.push(...deduplicatedFindings);
   }
 
-  // Calculate default risk score if engine 9 was skipped
-  let fallbackDeduction = 0;
-  allFindings.forEach(f => {
-    if (f.severity === 'CRITICAL') fallbackDeduction += 20;
-    else if (f.severity === 'HIGH') fallbackDeduction += 12;
-    else if (f.severity === 'MEDIUM') fallbackDeduction += 5;
-    else if (f.severity === 'LOW') fallbackDeduction += 2;
-  });
-  const computedScore = allFindings.length === 0 ? 98 : Math.max(15, Math.min(100, 100 - fallbackDeduction));
+  const computedScore = calculateDevSecOpsScore(allFindings);
 
   // Clean up temporary clone directory
   if (isTempClone && fs.existsSync(repoPath)) {

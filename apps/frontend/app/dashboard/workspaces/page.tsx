@@ -790,6 +790,7 @@ export default function WorkspacesPage() {
   const activeWorkspaces = useMemo(() => {
     return workspaces.map(ws => {
       const matchingScan = liveScans.find(ls =>
+        ls.workspaceId === ws.id ||
         (ls.id && ls.id.includes(ws.id)) ||
         (ws.targetUrl && ls.target && ls.target.toLowerCase().includes(ws.targetUrl.toLowerCase())) ||
         (ws.repoUrl && ls.target && ls.target.toLowerCase().includes(ws.repoUrl.toLowerCase())) ||
@@ -809,7 +810,9 @@ export default function WorkspacesPage() {
       }
 
       if (score === null || score === undefined || score === 0) {
-        score = Math.max(25, 100 - ((findingsCount || 6) * 5));
+        const count = findingsCount || 0;
+        const deduction = Math.min(85, count * 4.2 * (100 / (100 + count * 2.8)));
+        score = Math.max(15, Math.min(99, Math.round(100 - deduction)));
       }
 
       return {

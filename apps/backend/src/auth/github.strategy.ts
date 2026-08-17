@@ -8,20 +8,21 @@ export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
     const clientID = process.env.GITHUB_CLIENT_ID;
     const clientSecret = process.env.GITHUB_CLIENT_SECRET;
 
-    // If credentials are not set, initialize with placeholder values
-    // GitHub strategy will be disabled if credentials are missing
+    const backendUrl = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:4000';
+    const callbackURL = process.env.GITHUB_CALLBACK_URL || `${backendUrl}/api/auth/github/callback`;
+
     super({
       clientID: clientID || 'placeholder',
       clientSecret: clientSecret || 'placeholder',
-      callbackURL: process.env.GITHUB_CALLBACK_URL || 'http://localhost:4000/api/auth/github/callback',
+      callbackURL,
       scope: ['user:email'],
       userProfileURL: 'https://api.github.com/user',
     });
     
-    if (!clientID || !clientSecret) {
-      console.warn('[GithubStrategy] GitHub OAuth credentials not configured - strategy disabled');
+    if (!clientID || !clientSecret || clientID === 'placeholder') {
+      console.warn('[GithubStrategy] GitHub OAuth credentials not configured - set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET');
     } else {
-      console.log('[GithubStrategy] Initialized with GitHub credentials');
+      console.log(`[GithubStrategy] Initialized with GitHub credentials (Callback: ${callbackURL})`);
     }
   }
 

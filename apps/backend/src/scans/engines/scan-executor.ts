@@ -333,11 +333,43 @@ export class ScanExecutor {
     }
   }
 
-  /** Lower = worse. 100 minus weighted severity impact, floored at 15. */
-  private computeRiskScore(severities: Severity[]): number {
-    if (severities.length === 0) return 96;
-    const impact = severities.reduce((sum, s) => sum + (SEVERITY_WEIGHT[s] ?? 0), 0);
-    return Math.max(15, Math.min(100, 100 - impact));
+  /** Computes realistic DevSecOps posture score (0 - 100) using sub-linear severity deduction */
+  public computeRiskScore(severities: Severity[]): number {
+    if (!severities || severities.length === 0) return 98;
+
+    let critCount = 0;
+    let highCount = 0;
+    let medCount = 0;
+    let lowCount = 0;
+    let infoCount = 0;
+
+    severities.forEach(s => {
+      const sev = String(s || '').toUpperCase();
+      if (sev === 'CRITICAL') critCount++;
+      else if (sev === 'HIGH') highCount++;
+      else if (sev === 'MEDIUM') medCount++;
+      else if (sev === 'LOW') lowCount++;
+      else infoCount++;
+    });
+
+    let critDeduction = 0;
+    for (let i = 0; i < critCount; i++) critDeduction += 14 * Math.pow(0.85, i);
+
+    let highDeduction = 0;
+    for (let i = 0; i < highCount; i++) highDeduction += 7.5 * Math.pow(0.88, i);
+
+    let medDeduction = 0;
+    for (let i = 0; i < medCount; i++) medDeduction += 3.2 * Math.pow(0.90, i);
+
+    let lowDeduction = 0;
+    for (let i = 0; i < lowCount; i++) lowDeduction += 1.0 * Math.pow(0.92, i);
+
+    const infoDeduction = Math.min(3, infoCount * 0.2);
+    const totalDeduction = critDeduction + highDeduction + medDeduction + lowDeduction + infoDeduction;
+    const dampedDeduction = Math.min(88, totalDeduction * (100 / (100 + totalDeduction * 0.15)));
+
+    const finalScore = Math.round(100 - dampedDeduction);
+    return Math.max(12, Math.min(99, finalScore));
   }
 }
 

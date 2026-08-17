@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { enginesForMode, engineById, RESOURCE_META, type EngineDef, type ScanMode } from '@/lib/engines';
 import { EngineIcon } from '@/components/dashboard/EngineIcon';
-import { saveLiveScanRun, getActiveScanSession, setActiveScanSession, type ActiveScanSession } from '@/lib/live-scan-store';
+import { saveLiveScanRun, getActiveScanSession, setActiveScanSession, calculateSecurityScore, type ActiveScanSession } from '@/lib/live-scan-store';
 import { useEventBus, EventBus } from '@/lib/event-bus';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { Github } from '@/components/common/GithubIcon';
@@ -679,15 +679,7 @@ function LiveScanContent() {
 
           let scanScore = st.riskScore;
           if (!scanScore || scanScore === 0) {
-            let deduction = 0;
-            fetchedList.forEach((f: any) => {
-              const sev = String(f.severity).toUpperCase();
-              if (sev === 'CRITICAL') deduction += 20;
-              else if (sev === 'HIGH') deduction += 12;
-              else if (sev === 'MEDIUM') deduction += 6;
-              else if (sev === 'LOW') deduction += 2;
-            });
-            scanScore = fetchedList.length === 0 ? 98 : Math.max(15, 100 - deduction);
+            scanScore = calculateSecurityScore(fetchedList);
           }
 
           saveLiveScanRun({
@@ -697,6 +689,7 @@ function LiveScanContent() {
             engines: currentEngines,
             findings: fetchedList,
             score: scanScore,
+            workspaceId: currentWorkspaceId || workspaceId || 'ws-default',
           });
 
           setActiveScanSession({
@@ -1012,14 +1005,7 @@ function LiveScanContent() {
         setScanStatus('completed');
         setIsExecuting(false);
 
-        let directDeduction = 0;
-        finalFindings.forEach(f => {
-          if (f.severity === 'CRITICAL') directDeduction += 20;
-          else if (f.severity === 'HIGH') directDeduction += 12;
-          else if (f.severity === 'MEDIUM') directDeduction += 6;
-          else if (f.severity === 'LOW') directDeduction += 2;
-        });
-        const directScore = finalFindings.length === 0 ? 98 : Math.max(15, 100 - directDeduction);
+        const directScore = calculateSecurityScore(finalFindings);
 
         // Save scan run to store and broadcast events
         saveLiveScanRun({
@@ -1028,6 +1014,7 @@ function LiveScanContent() {
           type: 'GITHUB',
           engines: Array.from<string>(selectedEngines),
           score: directScore,
+          workspaceId: workspaceId || 'ws-default',
           findings: finalFindings.map(f => ({
             id: f.id,
             title: f.title,
@@ -1155,14 +1142,7 @@ function LiveScanContent() {
         setScanStatus('completed');
         setIsExecuting(false);
 
-        let combDeduction = 0;
-        combinedResults.forEach(f => {
-          if (f.severity === 'CRITICAL') combDeduction += 20;
-          else if (f.severity === 'HIGH') combDeduction += 12;
-          else if (f.severity === 'MEDIUM') combDeduction += 6;
-          else if (f.severity === 'LOW') combDeduction += 2;
-        });
-        const combScore = combinedResults.length === 0 ? 98 : Math.max(15, 100 - combDeduction);
+        const combScore = calculateSecurityScore(combinedResults);
 
         saveLiveScanRun({
           id: generatedScanId,
@@ -1170,6 +1150,7 @@ function LiveScanContent() {
           type: 'COMBINED',
           engines: Array.from<string>(selectedEngines),
           score: combScore,
+          workspaceId: workspaceId || 'ws-default',
           findings: combinedResults.map(f => ({
             id: f.id,
             title: f.title,
@@ -1281,14 +1262,7 @@ function LiveScanContent() {
         setScanStatus('completed');
         setIsExecuting(false);
 
-        let demoDeduction = 0;
-        found.forEach(f => {
-          if (f.severity === 'CRITICAL') demoDeduction += 20;
-          else if (f.severity === 'HIGH') demoDeduction += 12;
-          else if (f.severity === 'MEDIUM') demoDeduction += 6;
-          else if (f.severity === 'LOW') demoDeduction += 2;
-        });
-        const demoScore = found.length === 0 ? 98 : Math.max(15, 100 - demoDeduction);
+        const demoScore = calculateSecurityScore(found);
 
         // Save scan run to real-time store
         saveLiveScanRun({
@@ -1297,6 +1271,7 @@ function LiveScanContent() {
           type: mode,
           engines: Array.from<string>(selectedEngines),
           score: demoScore,
+          workspaceId: workspaceId || 'ws-default',
           findings: found.map(f => ({
             id: f.id,
             title: f.title,

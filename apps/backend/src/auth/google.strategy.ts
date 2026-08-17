@@ -8,19 +8,20 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const clientID = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-    // If credentials are not set, initialize with placeholder values
-    // Google strategy will be disabled if credentials are missing
+    const backendUrl = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:4000';
+    const callbackURL = process.env.GOOGLE_CALLBACK_URL || `${backendUrl}/api/auth/google/callback`;
+
     super({
       clientID: clientID || 'placeholder',
       clientSecret: clientSecret || 'placeholder',
-      callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/auth/google/callback',
+      callbackURL,
       scope: ['email', 'profile'],
     });
     
-    if (!clientID || !clientSecret) {
-      console.warn('[GoogleStrategy] Google OAuth credentials not configured - strategy disabled');
+    if (!clientID || !clientSecret || clientID === 'placeholder') {
+      console.warn('[GoogleStrategy] Google OAuth credentials not configured - set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET');
     } else {
-      console.log('[GoogleStrategy] Initialized with Google credentials');
+      console.log(`[GoogleStrategy] Initialized with Google credentials (Callback: ${callbackURL})`);
     }
   }
 

@@ -23,6 +23,7 @@ export interface StoredFinding {
   createdAt: string;
   scanId?: string;
   userKey?: string;
+  workspaceId?: string;
   targetType?: 'WEBSITE' | 'GITHUB' | 'COMBINED';
 }
 
@@ -40,6 +41,7 @@ export interface StoredScan {
   engines: string[];
   findings: StoredFinding[];
   userKey?: string;
+  workspaceId?: string;
 }
 
 export interface ActiveScanSession {
@@ -64,24 +66,45 @@ const EVENT_NAME = 'securelens:scan-completed';
 export const EVENT_ACTIVE_SCAN_UPDATED = 'securelens:active-scan-updated';
 
 /**
- * Calculates a standard non-linear Security Posture Score (0 - 100) based on vulnerability findings.
- * Uses an enterprise asymptotic risk curve so scores decay smoothly and accurately across finding volumes.
+ * Calculates a standard non-linear DevSecOps Security Posture Score (0 - 100).
+ * Uses sub-linear diminishing severity deduction with density scaling.
  */
 export function calculateSecurityScore(findings: Array<{ severity?: string }>): number {
   if (!findings || findings.length === 0) return 98;
-  let weightedRisk = 0;
+
+  let critCount = 0;
+  let highCount = 0;
+  let medCount = 0;
+  let lowCount = 0;
+  let infoCount = 0;
+
   findings.forEach(f => {
     const sev = (f.severity || '').toUpperCase();
-    if (sev === 'CRITICAL') weightedRisk += 20;
-    else if (sev === 'HIGH') weightedRisk += 10;
-    else if (sev === 'MEDIUM') weightedRisk += 4;
-    else if (sev === 'LOW') weightedRisk += 1.5;
-    else if (sev === 'INFO') weightedRisk += 0.2;
-    else weightedRisk += 3;
+    if (sev === 'CRITICAL') critCount++;
+    else if (sev === 'HIGH') highCount++;
+    else if (sev === 'MEDIUM') medCount++;
+    else if (sev === 'LOW') lowCount++;
+    else infoCount++;
   });
 
-  const score = Math.round(100 / (1 + (weightedRisk / 32)));
-  return Math.max(5, Math.min(99, score));
+  let critDeduction = 0;
+  for (let i = 0; i < critCount; i++) critDeduction += 14 * Math.pow(0.85, i);
+
+  let highDeduction = 0;
+  for (let i = 0; i < highCount; i++) highDeduction += 7.5 * Math.pow(0.88, i);
+
+  let medDeduction = 0;
+  for (let i = 0; i < medCount; i++) medDeduction += 3.2 * Math.pow(0.90, i);
+
+  let lowDeduction = 0;
+  for (let i = 0; i < lowCount; i++) lowDeduction += 1.0 * Math.pow(0.92, i);
+
+  const infoDeduction = Math.min(3, infoCount * 0.2);
+  const totalDeduction = critDeduction + highDeduction + medDeduction + lowDeduction + infoDeduction;
+  const dampedDeduction = Math.min(88, totalDeduction * (100 / (100 + totalDeduction * 0.15)));
+
+  const finalScore = Math.round(100 - dampedDeduction);
+  return Math.max(12, Math.min(99, finalScore));
 }
 
 /**
@@ -224,13 +247,31 @@ export function getStoredLiveScans(): StoredScan[] {
   try {
     const userKey = getCurrentUserKey();
     const userRaw = localStorage.getItem(getUserScansKey(userKey));
+    let list: StoredScan[] = [];
     if (userRaw) {
       const parsed = JSON.parse(userRaw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) list = parsed;
+    } else {
+      const raw = localStorage.getItem(STORAGE_KEY_SCANS_GLOBAL);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) list = parsed;
+      }
     }
 
-    const raw = localStorage.getItem(STORAGE_KEY_SCANS_GLOBAL);
-    return raw ? JSON.parse(raw) : [];
+    return list.map(s => {
+      let score = s.score;
+      if (s.findings && s.findings.length > 0) {
+        if (score === undefined || score === null || score === 0 || score === 15) {
+          score = calculateSecurityScore(s.findings);
+        }
+      } else if (score === undefined || score === null || score === 0 || score === 15) {
+        const count = s.findingsCount || 0;
+        const deduction = Math.min(85, count * 4.2 * (100 / (100 + count * 2.8)));
+        score = Math.max(15, Math.min(99, Math.round(100 - deduction)));
+      }
+      return { ...s, score };
+    });
   } catch {
     return [];
   }
@@ -335,6 +376,7 @@ export function saveLiveScanRun(params: {
       createdAt: now.toISOString().split('T')[0],
       scanId,
       userKey,
+      workspaceId: params.workspaceId || (f as any).workspaceId,
       targetType: (f as any).targetType || scanType,
     };
 
@@ -371,6 +413,7 @@ export function saveLiveScanRun(params: {
     engines: params.engines || [],
     findings: mappedFindings,
     userKey,
+    workspaceId: params.workspaceId,
   };
 
   if (typeof window !== 'undefined') {
@@ -881,7 +924,9 @@ export function useLiveScanSync(pollIntervalMs = 2000) {
             const mapped: StoredScan[] = scansJson.map(s => {
               let score = s.riskScore;
               if (score === null || score === undefined || score === 0) {
-                score = Math.max(15, 100 - ((s.findingsCount || 0) * 6));
+                const count = s.findingsCount || 0;
+                const deduction = Math.min(85, count * 4.2 * (100 / (100 + count * 2.8)));
+                score = Math.max(15, Math.min(99, Math.round(100 - deduction)));
               }
               return {
                 id: s.id,
