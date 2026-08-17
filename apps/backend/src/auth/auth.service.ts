@@ -81,7 +81,6 @@ export class AuthService {
             targetUrl: 'https://uptoskills.com',
             userId: created.id,
             tags: ['production', 'primary'],
-            riskScore: 98,
           },
         }),
       );
@@ -190,7 +189,6 @@ export class AuthService {
               repoUrl: profile.githubId && profile.username ? `https://github.com/${profile.username}/security-audit` : null,
               userId: dbUser.id,
               tags: ['production', 'primary'],
-              riskScore: 98,
             },
           }),
         );
