@@ -128,36 +128,6 @@ export default function HowItWorks() {
             );
           })}
         </div>
-
-        {/* Benefits Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.8 }}
-          viewport={{ once: true }}
-          className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-6"
-        >
-          {[
-            { label: 'Time to Insight', value: 'Minutes', icon: '⚡' },
-            { label: 'False Positive Rate', value: '<5%', icon: '🎯' },
-            { label: 'Coverage', value: '50+ Protocols', icon: '🛡️' },
-          ].map((item, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.5 + idx * 0.1, duration: 0.6 }}
-              viewport={{ once: true }}
-              className="p-6 rounded-lg bg-[#0b1020]/75 border border-white/10 text-center"
-            >
-              <div className="text-3xl mb-2">{item.icon}</div>
-              <div className="text-2xl font-bold text-violet-400 mb-1">
-                {item.value}
-              </div>
-              <div className="text-gray-400 text-sm">{item.label}</div>
-            </motion.div>
-          ))}
-        </motion.div>
       </div>
     </section>
   );

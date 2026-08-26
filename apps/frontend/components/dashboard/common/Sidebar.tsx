@@ -32,7 +32,6 @@ const NAV_ITEMS = [
   { name: 'AI Copilot',    href: '/dashboard/ai-copilot',   icon: Sparkles },
   { name: 'Analytics',     href: '/dashboard/analytics',    icon: BarChart2 },
   { name: 'Notifications', href: '/dashboard/notifications', icon: Bell, badge: NOTIFICATION_COUNT },
-  { name: 'Community',     href: '/dashboard/community',    icon: Users },
   { name: 'Settings',      href: '/dashboard/settings',     icon: Settings },
 ] as const;
 
