@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Code2, Globe2, ShieldCheck } from "lucide-react";
 import { Github } from "@/components/common/GithubIcon";
+import { ShiningText } from "@/components/common/ShiningText";
 
 import HeroButtons from "./HeroButtons";
 import HeroBackground from "./HeroBackground";
@@ -119,21 +120,11 @@ export default function Hero() {
           transition={{ duration: 0.7, ease: "easeOut" }}
           className="w-full"
         >
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.45 }}
-            className="mb-3 sm:mb-4 flex items-center gap-2"
-          >
-            <motion.span 
-              className="bg-gradient-to-r from-violet-400 via-purple-400 to-fuchsia-400 bg-clip-text text-3xl sm:text-4xl lg:text-6xl font-black text-transparent leading-tight"
-              style={{
-                backgroundSize: '200% 100%',
-              }}
-            >
+          <div className="mb-3 sm:mb-4 flex items-center gap-2">
+            <ShiningText className="text-3xl sm:text-4xl lg:text-6xl font-black leading-tight">
               SecureLens
-            </motion.span>
-          </motion.div>
+            </ShiningText>
+          </div>
 
           <motion.div
             initial={{ opacity: 0, y: 10 }}

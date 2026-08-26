@@ -35,26 +35,6 @@ export default function About() {
               false positives. We're committed to staying at the forefront of security
               technology and helping organizations protect what matters most.
             </p>
-
-            {/* Stats */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-8">
-              {[
-                { label: 'Security Pros', value: '10K+' },
-                { label: 'Orgs Protected', value: '500+' },
-                { label: 'Vulnerabilities Found', value: '1M+' },
-              ].map((stat, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: idx * 0.1 }}
-                  viewport={{ once: true }}
-                >
-                  <div className="text-2xl font-bold text-violet-400">{stat.value}</div>
-                  <div className="text-sm text-gray-400">{stat.label}</div>
-                </motion.div>
-              ))}
-            </div>
           </motion.div>
 
           {/* Right Side - Visual */}
