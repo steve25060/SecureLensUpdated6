@@ -135,6 +135,20 @@ export class NotificationsService {
     if (idx !== -1) { store.splice(idx, 1); this.writeFile(store); }
   }
 
+  async removeAll(userId: string): Promise<void> {
+    if (this.prisma.connected) {
+      try {
+        await this.prisma.notification.deleteMany({ where: { userId } });
+        return;
+      } catch (err: any) {
+        this.logger.warn(`DB deleteAll failed (${err.message}) → file fallback`);
+      }
+    }
+    const store = this.fileStore();
+    const filtered = store.filter(n => n.userId !== userId);
+    this.writeFile(filtered);
+  }
+
   // ─── file fallback ───────────────────────────────────────────────────────────
   private fileStore(): AppNotification[] {
     try {

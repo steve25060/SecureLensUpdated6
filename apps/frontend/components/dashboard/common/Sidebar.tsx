@@ -65,9 +65,11 @@ const NavLinks: React.FC<NavLinksProps> = ({ pathname, onClose }) => {
     updateUnread();
     window.addEventListener('storage', updateUnread);
     window.addEventListener('userProfileUpdated', updateUnread);
+    window.addEventListener('securelens:notifications-updated', updateUnread);
     return () => {
       window.removeEventListener('storage', updateUnread);
       window.removeEventListener('userProfileUpdated', updateUnread);
+      window.removeEventListener('securelens:notifications-updated', updateUnread);
     };
   }, []);
 

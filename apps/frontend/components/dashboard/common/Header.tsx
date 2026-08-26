@@ -121,7 +121,7 @@ const Header: React.FC = () => {
 
   const [readNotifIds, setReadNotifIds] = useState<(string | number)[]>([]);
 
-  useEffect(() => {
+  const fetchHeaderNotifications = () => {
     try {
       const storedRead = JSON.parse(localStorage.getItem('sl_header_read_notifications') || '[]');
       setReadNotifIds(storedRead);
@@ -147,19 +147,45 @@ const Header: React.FC = () => {
         })
         .catch(() => {});
     }
+  };
+
+  useEffect(() => {
+    fetchHeaderNotifications();
+    window.addEventListener('securelens:notifications-updated', fetchHeaderNotifications);
+    window.addEventListener('storage', fetchHeaderNotifications);
+    return () => {
+      window.removeEventListener('securelens:notifications-updated', fetchHeaderNotifications);
+      window.removeEventListener('storage', fetchHeaderNotifications);
+    };
   }, []);
 
-  const handleMarkAllRead = () => {
+  const handleMarkAllRead = async () => {
     const allIds = notifications.map(n => n.id);
     setReadNotifIds(allIds);
     localStorage.setItem('sl_header_read_notifications', JSON.stringify(allIds));
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+    if (token) {
+      fetch('/api/notifications/read-all', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
+    window.dispatchEvent(new CustomEvent('securelens:notifications-updated'));
   };
 
-  const handleNotifClick = (id: string | number) => {
+  const handleNotifClick = async (id: string | number) => {
     if (!readNotifIds.includes(id)) {
       const updated = [...readNotifIds, id];
       setReadNotifIds(updated);
       localStorage.setItem('sl_header_read_notifications', JSON.stringify(updated));
+      const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+      if (token) {
+        fetch(`/api/notifications/${id}/read`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        }).catch(() => {});
+      }
+      window.dispatchEvent(new CustomEvent('securelens:notifications-updated'));
     }
     setNotifOpen(false);
     router.push('/dashboard/notifications');

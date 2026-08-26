@@ -24,8 +24,18 @@ export class NotificationsController {
     return this.notificationsService.markAllRead(req.user?.userId ?? req.user?.id ?? '');
   }
 
+  @Delete('all')
+  removeAll(@Req() req: AuthRequest) {
+    return this.notificationsService.removeAll(req.user?.userId ?? req.user?.id ?? '');
+  }
+
   @Delete(':id')
   remove(@Req() req: AuthRequest, @Param('id') id: string) {
     return this.notificationsService.remove(id, req.user?.userId ?? req.user?.id ?? '');
+  }
+
+  @Delete()
+  deleteAll(@Req() req: AuthRequest) {
+    return this.notificationsService.removeAll(req.user?.userId ?? req.user?.id ?? '');
   }
 }
