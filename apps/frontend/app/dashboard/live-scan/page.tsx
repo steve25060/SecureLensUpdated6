@@ -13,6 +13,7 @@ import {
 import { enginesForMode, engineById, RESOURCE_META, type EngineDef, type ScanMode } from '@/lib/engines';
 import { EngineIcon } from '@/components/dashboard/EngineIcon';
 import { saveLiveScanRun, getActiveScanSession, setActiveScanSession, calculateSecurityScore, type ActiveScanSession } from '@/lib/live-scan-store';
+import { getStoredWorkspaces, saveStoredWorkspace } from '@/lib/workspaces-store';
 import { useEventBus, EventBus } from '@/lib/event-bus';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { Github } from '@/components/common/GithubIcon';
@@ -598,36 +599,70 @@ function LiveScanContent() {
     setLogs(prev => [...prev, { ts, level, message, engine }]);
   }, []);
 
-  // ─── Load workspaces on mount ──────────────────────────────────────────────
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/workspaces', { headers: authHeaders() });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // ─── Load & Synchronize Workspaces ──────────────────────────────────────────
+  const refreshWorkspaces = useCallback(async () => {
+    // 1. Immediately populate from unified client store (stored workspaces + defaults)
+    const stored = getStoredWorkspaces();
+    if (stored && stored.length > 0) {
+      setWorkspaces(stored as WorkspaceOption[]);
+      setWorkspaceId(prev => {
+        if (prev && stored.some(w => w.id === prev)) return prev;
+        const initialWs = stored[0];
+        if (initialWs.type) setMode((initialWs.type || 'WEBSITE').toLowerCase() as ScanMode);
+        if (initialWs.targetUrl) setTargetUrl(initialWs.targetUrl);
+        if (initialWs.repoUrl) setRepoUrl(initialWs.repoUrl);
+        return initialWs.id;
+      });
+    }
+
+    // 2. Fetch from backend API and merge seamlessly
+    try {
+      const res = await fetch('/api/workspaces', { headers: authHeaders() });
+      if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : (data?.workspaces ?? []);
-        if (list.length > 0) {
-          setWorkspaces(list);
-          const initialWs = list[0];
-          setWorkspaceId(prev => {
-            if (prev && list.some((w: any) => w.id === prev)) return prev;
-            if (initialWs.type) setMode((initialWs.type || 'WEBSITE').toLowerCase() as ScanMode);
-            if (initialWs.targetUrl) setTargetUrl(initialWs.targetUrl);
-            if (initialWs.repoUrl) setRepoUrl(initialWs.repoUrl);
-            return initialWs.id;
+        const apiList = Array.isArray(data) ? data : (data?.workspaces ?? []);
+        if (apiList.length > 0) {
+          const map = new Map<string, WorkspaceOption>();
+          // Preserve stored items
+          stored.forEach(w => map.set(w.id, w as WorkspaceOption));
+          // Merge API items
+          apiList.forEach((w: any) => {
+            map.set(w.id, {
+              id: w.id,
+              name: w.name,
+              type: w.type || 'WEBSITE',
+              targetUrl: w.targetUrl,
+              repoUrl: w.repoUrl,
+            });
+            saveStoredWorkspace(w);
           });
+          const merged = Array.from(map.values());
+          setWorkspaces(merged);
           setDemoMode(false);
-        } else {
-          setWorkspaces(DEMO_WORKSPACES);
-          if (!workspaceId) setWorkspaceId(DEMO_WORKSPACES[0].id);
         }
-      } catch (err) {
-        console.warn('Backend workspaces load fallback:', err);
-        setWorkspaces(DEMO_WORKSPACES);
-        if (!workspaceId) setWorkspaceId(DEMO_WORKSPACES[0].id);
       }
-    })();
+    } catch (err) {
+      console.warn('Backend workspaces load fallback:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    refreshWorkspaces();
+  }, [refreshWorkspaces]);
+
+  // Real-time EventBus synchronization for workspaces
+  useEventBus('WORKSPACE_CREATED', () => {
+    refreshWorkspaces();
+  });
+  useEventBus('WORKSPACE_UPDATED', () => {
+    refreshWorkspaces();
+  });
+  useEventBus('WORKSPACE_DELETED', () => {
+    refreshWorkspaces();
+  });
+  useEventBus('USER_STORAGE_HYDRATED', () => {
+    refreshWorkspaces();
+  });
 
   // ─── Reusable Polling Loop ──────────────────────────────────────────────────
   const startPolling = useCallback((id: string, currentTarget: string, currentMode: string, currentEngines: string[], currentProfile: string, currentWorkspaceId: string) => {

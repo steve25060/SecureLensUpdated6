@@ -87,17 +87,39 @@ export class WorkspacesService {
         });
 
         if (rows.length === 0) {
-          const defaultWs = await this.prisma.workspace.create({
+          const now = new Date();
+          const ws1 = await this.prisma.workspace.create({
             data: {
-              name: 'Default Security Workspace',
-              description: 'Primary workspace for live automated scanning',
-              type: 'COMBINED',
-              targetUrl: 'https://example.com',
-              tags: ['production', 'live-scan'],
+              name: 'UptoSkills – Main Web Surface',
+              description: 'Primary production website, API endpoints, and customer authentication portal.',
+              type: 'WEBSITE',
+              targetUrl: 'https://uptoskills.com',
+              tags: ['production', 'critical', 'web-app'],
               userId,
             },
           });
-          rows = [defaultWs as any];
+          const ws2 = await this.prisma.workspace.create({
+            data: {
+              name: 'Backend Core & Auth Service',
+              description: 'GitHub source code repository scan for the backend microservices and JWT handling.',
+              type: 'GITHUB',
+              repoUrl: 'https://github.com/uptoskills/core',
+              tags: ['source-code', 'sast', 'secrets'],
+              userId,
+            },
+          });
+          const ws3 = await this.prisma.workspace.create({
+            data: {
+              name: 'E-Commerce Platform – Multi-Vector Audit',
+              description: 'Full-stack combined analysis covering live storefront web assets and GitHub infrastructure repo.',
+              type: 'COMBINED',
+              targetUrl: 'https://uptoskills.com',
+              repoUrl: 'https://github.com/uptoskills/core',
+              tags: ['combined', 'staging', 'full-stack'],
+              userId,
+            },
+          });
+          rows = [ws1, ws2, ws3] as any[];
         }
 
         return rows.map(r => this.serializeDb(r));
