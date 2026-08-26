@@ -382,49 +382,64 @@ function SmoothProgress({ value, status }: { value: number; status: ScanStatusVa
     };
   }, [isActive, isDone]);
 
-  const barClass =
+  const gradientStyle =
     status === 'failed'
-      ? 'from-red-600 to-rose-500 shadow-red-500/50'
+      ? 'linear-gradient(90deg, #ef4444 0%, #dc2626 100%)'
       : status === 'cancelled'
-      ? 'from-gray-600 to-slate-500 shadow-gray-500/50'
+      ? 'linear-gradient(90deg, #6b7280 0%, #4b5563 100%)'
       : status === 'completed'
-      ? 'from-emerald-500 via-teal-400 to-cyan-400 shadow-emerald-500/50'
-      : 'from-violet-600 via-indigo-500 to-cyan-400 shadow-violet-500/50';
+      ? 'linear-gradient(90deg, #10b981 0%, #14b8a6 50%, #06b6d4 100%)'
+      : 'linear-gradient(90deg, #8b5cf6 0%, #a855f7 35%, #ec4899 70%, #06b6d4 100%)';
+
+  const glowShadow =
+    status === 'failed'
+      ? '0 0 16px rgba(239, 68, 68, 0.75), 0 0 6px rgba(220, 38, 38, 0.9)'
+      : status === 'completed'
+      ? '0 0 16px rgba(16, 185, 129, 0.75), 0 0 6px rgba(6, 182, 212, 0.9)'
+      : '0 0 18px rgba(168, 85, 247, 0.8), 0 0 8px rgba(6, 182, 212, 0.9)';
 
   return (
-    <div className="space-y-2.5 p-3.5 rounded-2xl bg-[#0f1019] border border-white/10 shadow-lg shadow-black/30">
+    <div className="space-y-3 p-4 rounded-2xl bg-[#0f1424] border border-violet-500/20 shadow-xl shadow-black/40">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Activity size={14} className={isActive ? 'text-violet-400 animate-pulse' : isDone ? 'text-emerald-400' : 'text-gray-400'} />
-          <span className="text-xs font-semibold uppercase tracking-wider text-gray-200">Scan Progress</span>
-        </div>
         <div className="flex items-center gap-2">
+          <Activity size={16} className={isActive ? 'text-cyan-400 animate-pulse' : isDone ? 'text-emerald-400' : 'text-gray-400'} />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-200">Scan Progress</span>
+        </div>
+        <div className="flex items-center gap-2.5">
           {isActive && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/30 animate-pulse">
+            <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-violet-500/20 text-violet-300 border border-violet-500/40 animate-pulse">
               ANALYZING
             </span>
           )}
           {isDone && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
               COMPLETE
             </span>
           )}
-          <span className="text-base font-black text-white tabular-nums tracking-tight font-mono">
+          <span className="text-lg font-black text-cyan-300 tabular-nums tracking-tight font-mono drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">
             {display}%
           </span>
         </div>
       </div>
 
       {/* High-visibility Glowing Progress Bar */}
-      <div className="w-full bg-[#080910] rounded-full h-4 p-0.5 border border-white/20 shadow-inner overflow-hidden relative">
+      <div className="w-full bg-[#182035] rounded-full h-4 p-0.5 border border-violet-400/30 shadow-inner overflow-hidden relative">
         <div
-          style={{ width: `${Math.max(barWidth, isActive || isDone ? 2 : 0)}%` }}
-          className={`h-full rounded-full bg-gradient-to-r ${barClass} relative overflow-hidden transition-all duration-150 shadow-md`}
+          style={{
+            width: `${Math.max(barWidth, isActive || isDone ? 2 : 0)}%`,
+            background: gradientStyle,
+            boxShadow: glowShadow,
+          }}
+          className="h-full rounded-full relative overflow-hidden transition-all duration-150 flex items-center justify-end"
         >
+          {/* Pulsing leading head light */}
+          {isActive && (
+            <span className="w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_8px_#ffffff] shrink-0 mr-0.5 animate-pulse" />
+          )}
           {/* Moving shimmer light wave while active */}
           {isActive && (
             <motion.div
-              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent"
               animate={{ x: ['-100%', '200%'] }}
               transition={{ duration: 1.2, ease: 'linear', repeat: Infinity }}
             />

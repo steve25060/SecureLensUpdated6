@@ -20,7 +20,7 @@ export default function ScrollProgressBar() {
 
   return (
     <motion.div
-      className="fixed top-0 left-0 h-0.5 bg-violet-600 z-50"
+      className="fixed top-0 left-0 h-1 z-50 bg-gradient-to-r from-violet-500 via-fuchsia-500 to-cyan-400 shadow-[0_0_12px_rgba(139,92,246,0.9)]"
       style={{ width: `${scroll}%` }}
       initial={{ width: 0 }}
       animate={{ width: `${scroll}%` }}
