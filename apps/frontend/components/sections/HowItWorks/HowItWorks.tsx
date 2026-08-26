@@ -1,13 +1,13 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Settings, Play, BarChart3, CheckCircle } from 'lucide-react';
+import { Target, Sliders, ScanSearch, ShieldCheck } from 'lucide-react';
 import { ShiningText } from '@/components/common/ShiningText';
 
 const steps = [
   {
     step: 1,
-    icon: Settings,
+    icon: Target,
     title: 'Configure Your Targets',
     description: 'Add your applications, APIs, infrastructure, and cloud resources to scan.',
     details: [
@@ -18,7 +18,7 @@ const steps = [
   },
   {
     step: 2,
-    icon: Play,
+    icon: Sliders,
     title: 'Choose Scan Templates',
     description: 'Select from pre-built templates or create custom scanning profiles.',
     details: [
@@ -30,7 +30,7 @@ const steps = [
   },
   {
     step: 3,
-    icon: BarChart3,
+    icon: ScanSearch,
     title: 'Analyze Results',
     description: 'Review detailed findings with severity, exploitability, and impact ratings.',
     details: [
@@ -41,7 +41,7 @@ const steps = [
   },
   {
     step: 4,
-    icon: CheckCircle,
+    icon: ShieldCheck,
     title: 'Track & Remediate',
     description: 'Monitor remediation progress and verify security improvements.',
     details: [

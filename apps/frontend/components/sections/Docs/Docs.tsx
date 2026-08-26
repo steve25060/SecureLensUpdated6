@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  BookOpen, ExternalLink, X, Copy, Check, ChevronRight,
+  ExternalLink, X, Copy, Check, ChevronRight,
   Terminal, FileCode, CheckCircle2, Share2, Wrench, Rocket,
   Shield, Zap, Code2, Globe, Cpu, ArrowRight, Layers, Sparkles
 } from 'lucide-react';
@@ -247,14 +247,9 @@ export default function Docs() {
           viewport={{ once: true }}
           className="text-center mb-16"
         >
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="p-2.5 rounded-xl bg-violet-600/10 border border-violet-500/30 text-violet-400">
-              <BookOpen className="w-6 h-6" />
-            </div>
-            <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight">
-              <ShiningText>Documentation</ShiningText>
-            </h2>
-          </div>
+          <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
+            <ShiningText>Documentation</ShiningText>
+          </h2>
           <p className="text-gray-300 text-lg max-w-2xl mx-auto font-normal">
             Everything you need to master SecureLens, automate security scanning, and remediate vulnerabilities at speed.
           </p>
@@ -306,23 +301,6 @@ export default function Docs() {
               </div>
             </motion.div>
           ))}
-        </motion.div>
-
-        {/* Global CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.8 }}
-          viewport={{ once: true }}
-          className="text-center"
-        >
-          <button
-            onClick={() => setSelectedTopic(DOC_TOPICS[0])}
-            className="inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold shadow-lg shadow-violet-600/25 hover:shadow-violet-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-          >
-            <BookOpen className="w-5 h-5" />
-            Open Full Documentation Hub
-          </button>
         </motion.div>
       </div>
 
