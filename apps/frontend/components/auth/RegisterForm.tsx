@@ -64,6 +64,18 @@ export default function RegisterForm() {
         throw new Error(data?.message ?? "Registration failed. Please try again.");
       }
 
+      // Clear any prior session or demo data to ensure a completely fresh start from 0
+      localStorage.removeItem("securelens_workspaces_global");
+      localStorage.removeItem("securelens_live_scans");
+      localStorage.removeItem("securelens_live_findings");
+      localStorage.removeItem("securelens_reports_global");
+      localStorage.removeItem("securelens_active_scan_session");
+      localStorage.removeItem("user_org");
+      localStorage.removeItem("user_job_title");
+      localStorage.removeItem("user_phone");
+      localStorage.removeItem("user_bio");
+      localStorage.removeItem("user_avatar");
+
       // Persist token + user
       const token = data?.access_token || `token_reg_${Date.now()}`;
       localStorage.setItem("access_token", token);
@@ -84,7 +96,7 @@ export default function RegisterForm() {
         window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: userData }));
       }
 
-      // Hydrate user-scoped scan and finding results
+      // Hydrate clean user-scoped scan and finding results starting from 0
       hydrateUserScanStorage(userData.email || email.trim());
 
       router.push("/dashboard");

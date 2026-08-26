@@ -70,21 +70,6 @@ export class AuthService {
     );
     if (created) {
       this.logger.log(`Registered new user: ${created.id} (${email})`);
-
-      // Create primary security workspace for new registered user
-      await this.safeQuery(() =>
-        this.prisma.workspace.create({
-          data: {
-            name: `${dto.name.trim().split(' ')[0]}'s Workspace`,
-            description: 'Primary security workspace',
-            type: 'WEBSITE',
-            targetUrl: 'https://uptoskills.com',
-            userId: created.id,
-            tags: ['production', 'primary'],
-          },
-        }),
-      );
-
       return this.issueToken(created);
     }
 

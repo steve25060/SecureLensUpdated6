@@ -511,10 +511,6 @@ function FindingsContent() {
       }
     }
 
-    if (list.length === 0 && !scanId && !targetParam) {
-      list = SEED_FINDINGS;
-    }
-
     return list;
   }, [findings, liveFindings, searchParams, hasLoadedApi]);
 

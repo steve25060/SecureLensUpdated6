@@ -186,6 +186,22 @@ export function hydrateUserScanStorage(userIdentifier?: string): void {
       localStorage.removeItem(STORAGE_KEY_ACTIVE_SCAN);
     }
 
+    // Workspaces scoped hydration
+    const userWorkspacesRaw = localStorage.getItem(`securelens_workspaces_${userKey}`);
+    if (userWorkspacesRaw) {
+      localStorage.setItem('securelens_workspaces_global', userWorkspacesRaw);
+    } else {
+      localStorage.removeItem('securelens_workspaces_global');
+    }
+
+    // Reports scoped hydration
+    const userReportsRaw = localStorage.getItem(`securelens_reports_${userKey}`);
+    if (userReportsRaw) {
+      localStorage.setItem('securelens_reports_global', userReportsRaw);
+    } else {
+      localStorage.removeItem('securelens_reports_global');
+    }
+
     // Broadcast user hydration event
     EventBus.publish('USER_STORAGE_HYDRATED', {
       userKey,

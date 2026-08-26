@@ -734,11 +734,6 @@ export default function WorkspacesPage() {
         if (!combinedMap.has(w.id)) combinedMap.set(w.id, w);
       });
 
-      // Default safety guarantee
-      if (combinedMap.size === 0) {
-        DEFAULT_WORKSPACES.forEach(w => combinedMap.set(w.id, w));
-      }
-
       setWorkspaces(Array.from(combinedMap.values()));
     } finally {
       setLoading(false);

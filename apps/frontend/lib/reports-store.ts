@@ -200,24 +200,24 @@ export const SEED_STORED_REPORTS: StoredReport[] = [
 
 /** Retrieve stored reports from localStorage */
 export function getStoredReports(): StoredReport[] {
-  if (typeof window === 'undefined') return SEED_STORED_REPORTS;
+  if (typeof window === 'undefined') return [];
   try {
     const userKey = getCurrentUserKey();
     const userStored = localStorage.getItem(getUserReportsKey(userKey));
     if (userStored) {
       const parsed = JSON.parse(userStored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
 
     const globalStored = localStorage.getItem(STORAGE_KEY_REPORTS_GLOBAL);
     if (globalStored) {
       const parsed = JSON.parse(globalStored);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {
     console.warn('Failed to parse stored reports:', e);
   }
-  return SEED_STORED_REPORTS;
+  return [];
 }
 
 /** Save a report to localStorage + dispatch sync events */

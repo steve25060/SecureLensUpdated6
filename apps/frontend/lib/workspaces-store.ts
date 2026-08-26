@@ -82,7 +82,7 @@ export const DEFAULT_WORKSPACES: Workspace[] = [
 
 /** Retrieve stored workspaces from localStorage + auto-derive from scans */
 export function getStoredWorkspaces(): Workspace[] {
-  if (typeof window === 'undefined') return DEFAULT_WORKSPACES;
+  if (typeof window === 'undefined') return [];
 
   const workspaceMap = new Map<string, Workspace>();
 
@@ -139,13 +139,7 @@ export function getStoredWorkspaces(): Workspace[] {
       }
     });
 
-    // 4. If still empty, seed defaults
-    if (workspaceMap.size === 0) {
-      DEFAULT_WORKSPACES.forEach(w => workspaceMap.set(w.id, w));
-      const seeded = Array.from(workspaceMap.values());
-      localStorage.setItem(STORAGE_KEY_WORKSPACES_GLOBAL, JSON.stringify(seeded));
-      localStorage.setItem(getUserWorkspacesKey(userKey), JSON.stringify(seeded));
-    }
+    // 4. If empty, return clean empty list
   } catch (e) {
     console.warn('Failed to retrieve workspaces from storage:', e);
   }

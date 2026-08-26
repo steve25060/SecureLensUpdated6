@@ -238,14 +238,14 @@ function SettingsContent() {
 
   // ─── Profile State ────────────────────────────────────────────────────────
   const [profile, setProfile] = useState({
-    name: 'Stavan Shah',
-    email: 'stavan@example.com',
-    organization: 'Acme Security Corp',
-    jobTitle: 'Lead AppSec Engineer',
-    phone: '+1 (555) 234-5678',
-    timezone: 'Asia/Kolkata',
-    bio: 'Security researcher and AppSec practitioner focused on automated penetration testing and threat intelligence.',
-    twoFactorEnabled: true,
+    name: '',
+    email: '',
+    organization: '',
+    jobTitle: 'AppSec Engineer',
+    phone: '',
+    timezone: 'UTC',
+    bio: '',
+    twoFactorEnabled: false,
     avatarUrl: '',
   });
 

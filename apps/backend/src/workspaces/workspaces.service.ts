@@ -86,75 +86,14 @@ export class WorkspacesService {
           orderBy: { createdAt: 'desc' },
         });
 
-        if (rows.length === 0) {
-          const now = new Date();
-          const ws1 = await this.prisma.workspace.create({
-            data: {
-              name: 'UptoSkills – Main Web Surface',
-              description: 'Primary production website, API endpoints, and customer authentication portal.',
-              type: 'WEBSITE',
-              targetUrl: 'https://uptoskills.com',
-              tags: ['production', 'critical', 'web-app'],
-              userId,
-            },
-          });
-          const ws2 = await this.prisma.workspace.create({
-            data: {
-              name: 'Backend Core & Auth Service',
-              description: 'GitHub source code repository scan for the backend microservices and JWT handling.',
-              type: 'GITHUB',
-              repoUrl: 'https://github.com/uptoskills/core',
-              tags: ['source-code', 'sast', 'secrets'],
-              userId,
-            },
-          });
-          const ws3 = await this.prisma.workspace.create({
-            data: {
-              name: 'E-Commerce Platform – Multi-Vector Audit',
-              description: 'Full-stack combined analysis covering live storefront web assets and GitHub infrastructure repo.',
-              type: 'COMBINED',
-              targetUrl: 'https://uptoskills.com',
-              repoUrl: 'https://github.com/uptoskills/core',
-              tags: ['combined', 'staging', 'full-stack'],
-              userId,
-            },
-          });
-          rows = [ws1, ws2, ws3] as any[];
-        }
-
         return rows.map(r => this.serializeDb(r));
       } catch (err: any) {
         this.logger.warn(`DB findAll failed (${err.message}) → file fallback`);
       }
     }
 
-    let fileList = this.fileStore();
-    const userFiltered = fileList.filter(w => w.userId === userId);
-    if (userFiltered.length > 0) {
-      return userFiltered;
-    }
-
-    if (fileList.length === 0) {
-      const now = new Date().toISOString();
-      const defaultWs: WorkspaceRecord = {
-        id: randomUUID(),
-        name: 'UptoSkills – Main Web Surface',
-        description: 'Primary production website, API endpoints, and customer authentication portal.',
-        tags: ['production', 'critical', 'web-app'],
-        type: 'WEBSITE',
-        targetUrl: 'https://uptoskills.com',
-        repoUrl: null,
-        userId,
-        riskScore: 84,
-        findingsCount: 6,
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-      };
-      fileList = [defaultWs, ...DEMO_SEED.map(s => ({ ...s, id: randomUUID(), userId, createdAt: now, updatedAt: now }))];
-      this.writeFile(fileList);
-    }
-    return fileList;
+    const fileList = this.fileStore();
+    return fileList.filter(w => w.userId === userId);
   }
 
   // ─── findOne ─────────────────────────────────────────────────────────────────

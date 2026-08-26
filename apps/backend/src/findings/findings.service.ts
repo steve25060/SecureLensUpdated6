@@ -92,9 +92,7 @@ export class FindingsService {
           this.prisma.finding.count({ where }),
         ]);
 
-        if (items.length > 0 || total > 0) {
-          return { items, total, page, limit, pages: Math.ceil(total / limit) };
-        }
+        return { items, total, page, limit, pages: Math.ceil(total / limit) || 0 };
       } catch (error: any) {
         this.logger.warn(`Failed to fetch DB findings (${error?.message}) → file fallback`);
       }

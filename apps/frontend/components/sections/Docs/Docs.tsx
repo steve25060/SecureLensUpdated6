@@ -541,17 +541,9 @@ export default function Docs() {
                   Need custom automation? SecureLens REST APIs support programmatic webhooks.
                 </p>
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                  <Link
-                    href="/dashboard/live-scan"
-                    onClick={() => setSelectedTopic(null)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-xs font-semibold hover:from-violet-500 hover:to-indigo-500 transition-all shadow-md shadow-violet-600/25"
-                  >
-                    <Rocket className="w-3.5 h-3.5" />
-                    Launch Scan Now
-                  </Link>
                   <button
                     onClick={() => setSelectedTopic(null)}
-                    className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors"
+                    className="px-5 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors"
                   >
                     Close
                   </button>

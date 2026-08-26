@@ -28,14 +28,12 @@ export class AnalyticsService {
           }),
         ]);
 
-        if (scans.length > 0 || findings.length > 0) {
-          return this.buildFromReal(scans, findings);
-        }
+        return this.buildFromReal(scans, findings);
       } catch (err: any) {
-        this.logger.warn(`Analytics DB query failed (${err.message}) → seed`);
+        this.logger.warn(`Analytics DB query failed (${err.message}) → fallback`);
       }
     }
-    return this.seedOverview();
+    return this.buildFromReal([], []);
   }
 
   private buildFromReal(scans: any[], findings: any[]) {
