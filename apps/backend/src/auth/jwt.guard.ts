@@ -30,26 +30,18 @@ export class OptionalJwtAuthGuard implements CanActivate {
       const decoded = decodeJwtPayload(token);
       if (decoded) {
         request.user = {
-          userId: decoded.sub || decoded.userId || decoded.id || 'demo-user-1',
-          id: decoded.sub || decoded.userId || decoded.id || 'demo-user-1',
-          email: decoded.email || 'demo@securelens.local',
-          name: decoded.name || decoded.username || 'Demo User',
-          username: decoded.username || decoded.name || 'demo',
+          userId: decoded.sub || decoded.userId || decoded.id || '',
+          id: decoded.sub || decoded.userId || decoded.id || '',
+          email: decoded.email || '',
+          name: decoded.name || decoded.username || '',
+          username: decoded.username || decoded.name || '',
           role: decoded.role || 'USER',
         };
         return true;
       }
     }
 
-    // Assign fallback user for live scan & dashboard session
-    request.user = request.user || {
-      id: 'demo-user-1',
-      userId: 'demo-user-1',
-      username: 'demo',
-      name: 'Demo User',
-      email: 'demo@securelens.local',
-      role: 'USER',
-    };
+    request.user = request.user || undefined;
     return true;
   }
 }

@@ -98,14 +98,16 @@ export function getStoredWorkspaces(): Workspace[] {
       }
     }
 
-    // 2. Global stored workspaces
-    const globalStored = localStorage.getItem(STORAGE_KEY_WORKSPACES_GLOBAL);
-    if (globalStored) {
-      const parsed = JSON.parse(globalStored);
-      if (Array.isArray(parsed)) {
-        parsed.forEach(w => {
-          if (!workspaceMap.has(w.id)) workspaceMap.set(w.id, w);
-        });
+    // 2. Global stored workspaces (only if default unauthenticated guest)
+    if (userKey === 'default') {
+      const globalStored = localStorage.getItem(STORAGE_KEY_WORKSPACES_GLOBAL);
+      if (globalStored) {
+        const parsed = JSON.parse(globalStored);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(w => {
+            if (!workspaceMap.has(w.id)) workspaceMap.set(w.id, w);
+          });
+        }
       }
     }
 

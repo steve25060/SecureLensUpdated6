@@ -28,16 +28,19 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard/notifications': 'Notifications',
 };
 
-const NOTIFICATIONS = [
-  { id: 1, title: 'Scan Complete', message: 'Acme Corp scan completed with 51 findings', time: '2m ago', type: 'success', read: false },
-  { id: 2, title: 'Critical Finding', message: 'SQL Injection detected on api-gateway-prod', time: '15m ago', type: 'critical', read: false },
-  { id: 3, title: 'New Workspace', message: 'Frontend-app workspace was created', time: '1h ago', type: 'info', read: false },
-  { id: 4, title: 'Report Generated', message: 'Weekly security report is ready for review', time: '3h ago', type: 'success', read: true },
-];
+interface HeaderNotification {
+  id: string | number;
+  title: string;
+  message: string;
+  time: string;
+  type: string;
+  read: boolean;
+}
 
 const Header: React.FC = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [notifications, setNotifications] = useState<HeaderNotification[]>([]);
   const [searchFocused, setSearchFocused] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [initials, setInitials] = useState('U');
@@ -116,22 +119,43 @@ const Header: React.FC = () => {
     router.push('/login');
   };
 
-  const [readNotifIds, setReadNotifIds] = useState<number[]>([]);
+  const [readNotifIds, setReadNotifIds] = useState<(string | number)[]>([]);
 
   useEffect(() => {
     try {
-      const storedRead: number[] = JSON.parse(localStorage.getItem('sl_header_read_notifications') || '[]');
+      const storedRead = JSON.parse(localStorage.getItem('sl_header_read_notifications') || '[]');
       setReadNotifIds(storedRead);
     } catch {}
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+    if (token) {
+      fetch('/api/notifications', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => {
+          if (Array.isArray(data)) {
+            setNotifications(data.map((n: any) => ({
+              id: n.id,
+              title: n.title,
+              message: n.body || n.message || '',
+              type: n.type || 'info',
+              read: Boolean(n.read),
+              time: 'Just now',
+            })));
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   const handleMarkAllRead = () => {
-    const allIds = NOTIFICATIONS.map(n => n.id);
+    const allIds = notifications.map(n => n.id);
     setReadNotifIds(allIds);
     localStorage.setItem('sl_header_read_notifications', JSON.stringify(allIds));
   };
 
-  const handleNotifClick = (id: number) => {
+  const handleNotifClick = (id: string | number) => {
     if (!readNotifIds.includes(id)) {
       const updated = [...readNotifIds, id];
       setReadNotifIds(updated);
@@ -150,12 +174,13 @@ const Header: React.FC = () => {
     }
   };
 
-  const unreadCount = NOTIFICATIONS.filter(n => !n.read && !readNotifIds.includes(n.id)).length;
+  const unreadCount = notifications.filter(n => !n.read && !readNotifIds.includes(n.id)).length;
 
   const typeIcon = (type: string) => {
     switch (type) {
       case 'success': return <CheckCircle size={14} className="text-green-400" />;
-      case 'critical': return <AlertTriangle size={14} className="text-red-400" />;
+      case 'critical':
+      case 'error': return <AlertTriangle size={14} className="text-red-400" />;
       default: return <Info size={14} className="text-blue-400" />;
     }
   };
@@ -244,26 +269,34 @@ const Header: React.FC = () => {
                   )}
                 </div>
                 <div className="max-h-72 overflow-y-auto">
-                  {NOTIFICATIONS.map((notif) => {
-                    const isRead = notif.read || readNotifIds.includes(notif.id);
-                    return (
-                      <div
-                        key={notif.id}
-                        onClick={() => handleNotifClick(notif.id)}
-                        className={`flex items-start gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors cursor-pointer ${!isRead ? 'bg-violet-600/[0.05]' : 'opacity-70'}`}
-                      >
-                        <div className="mt-0.5">{typeIcon(notif.type)}</div>
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-xs font-medium ${!isRead ? 'text-white font-semibold' : 'text-gray-400'}`}>{notif.title}</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5 truncate">{notif.message}</p>
+                  {notifications.length === 0 ? (
+                    <div className="py-8 px-4 text-center">
+                      <Bell size={24} className="mx-auto text-gray-600 mb-2 opacity-50" />
+                      <p className="text-xs text-gray-400 font-medium">No notifications yet</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">Real-time alerts will appear here</p>
+                    </div>
+                  ) : (
+                    notifications.map((notif) => {
+                      const isRead = notif.read || readNotifIds.includes(notif.id);
+                      return (
+                        <div
+                          key={notif.id}
+                          onClick={() => handleNotifClick(notif.id)}
+                          className={`flex items-start gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors cursor-pointer ${!isRead ? 'bg-violet-600/[0.05]' : 'opacity-70'}`}
+                        >
+                          <div className="mt-0.5">{typeIcon(notif.type)}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-xs font-medium ${!isRead ? 'text-white font-semibold' : 'text-gray-400'}`}>{notif.title}</p>
+                            <p className="text-[11px] text-gray-500 mt-0.5 truncate">{notif.message}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className="text-[10px] text-gray-600">{notif.time}</span>
+                            {!isRead && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className="text-[10px] text-gray-600">{notif.time}</span>
-                          {!isRead && <span className="w-1.5 h-1.5 rounded-full bg-violet-500" />}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
                 <div className="px-4 py-2.5 border-t border-white/[0.04] text-center">
                   <button onClick={() => { setNotifOpen(false); router.push('/dashboard/notifications'); }}

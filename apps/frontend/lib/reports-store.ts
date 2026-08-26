@@ -209,10 +209,12 @@ export function getStoredReports(): StoredReport[] {
       if (Array.isArray(parsed)) return parsed;
     }
 
-    const globalStored = localStorage.getItem(STORAGE_KEY_REPORTS_GLOBAL);
-    if (globalStored) {
-      const parsed = JSON.parse(globalStored);
-      if (Array.isArray(parsed)) return parsed;
+    if (userKey === 'default') {
+      const globalStored = localStorage.getItem(STORAGE_KEY_REPORTS_GLOBAL);
+      if (globalStored) {
+        const parsed = JSON.parse(globalStored);
+        if (Array.isArray(parsed)) return parsed;
+      }
     }
   } catch (e) {
     console.warn('Failed to parse stored reports:', e);

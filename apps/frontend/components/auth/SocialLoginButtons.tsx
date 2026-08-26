@@ -7,6 +7,7 @@ import {
   Loader2, X, Plus, Shield, Check, ExternalLink, ArrowRight,
   User, Mail, Building, Key, Sparkles, CheckCircle2, Lock
 } from "lucide-react";
+import { hydrateUserScanStorage } from "@/lib/live-scan-store";
 
 type Props = {
   mode?: "login" | "register";
@@ -136,6 +137,8 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
             window.dispatchEvent(new CustomEvent("userProfileUpdated", { detail: userData }));
           }
 
+          hydrateUserScanStorage(userData.email);
+
           setShowGoogleModal(false);
           setShowGitHubModal(false);
           router.push("/dashboard");
@@ -152,6 +155,8 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("userProfileUpdated", { detail: userData }));
           }
+
+          hydrateUserScanStorage(userData.email);
 
           setShowGoogleModal(false);
           setShowGitHubModal(false);

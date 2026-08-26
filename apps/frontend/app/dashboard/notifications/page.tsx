@@ -113,10 +113,36 @@ export default function NotificationsPage() {
   // Real-time synchronization - listen to critical actionable events
   const { isLive, eventCount, lastEventType, lastEventData, lastUpdate } = useRealtimeSync();
   
-  const [notifications, setNotifications] = useState<Notification[]>(SEED_NOTIFICATIONS);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<'all' | 'unread' | 'scan' | 'finding' | 'system'>('all');
   const [toastQueue, setToastQueue] = useState<Array<{ id: string; message: string; type: string }>>([]);
   const lastProcessedTimeRef = useRef<number>(0);
+
+  // Fetch real user notifications from backend
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+    if (!token) return;
+    fetch('/api/notifications', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (Array.isArray(data)) {
+          setNotifications(data.map((n: any) => ({
+            id: n.id,
+            title: n.title,
+            message: n.body || n.message || '',
+            type: n.type || 'info',
+            read: Boolean(n.read),
+            createdAt: n.createdAt || new Date().toISOString(),
+            category: n.category || 'scan',
+            link: n.metadata?.link,
+            eventType: n.metadata?.eventType,
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Show toast ONLY for distinct, actionable real-time security events
   useEffect(() => {

@@ -267,7 +267,7 @@ export function getStoredLiveScans(): StoredScan[] {
     if (userRaw) {
       const parsed = JSON.parse(userRaw);
       if (Array.isArray(parsed)) list = parsed;
-    } else {
+    } else if (userKey === 'default') {
       const raw = localStorage.getItem(STORAGE_KEY_SCANS_GLOBAL);
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -303,8 +303,11 @@ export function getStoredLiveFindings(): StoredFinding[] {
       if (Array.isArray(parsed)) return parsed;
     }
 
-    const raw = localStorage.getItem(STORAGE_KEY_FINDINGS_GLOBAL);
-    return raw ? JSON.parse(raw) : [];
+    if (userKey === 'default') {
+      const raw = localStorage.getItem(STORAGE_KEY_FINDINGS_GLOBAL);
+      return raw ? JSON.parse(raw) : [];
+    }
+    return [];
   } catch {
     return [];
   }

@@ -21,8 +21,6 @@ import {
   Users,
 } from 'lucide-react';
 
-const NOTIFICATION_COUNT = 3;
-
 const NAV_ITEMS = [
   { name: 'Dashboard',     href: '/dashboard',              icon: LayoutDashboard },
   { name: 'Workspaces',    href: '/dashboard/workspaces',   icon: Briefcase },
@@ -31,7 +29,7 @@ const NAV_ITEMS = [
   { name: 'Reports',       href: '/dashboard/reports',      icon: FileText },
   { name: 'AI Copilot',    href: '/dashboard/ai-copilot',   icon: Sparkles },
   { name: 'Analytics',     href: '/dashboard/analytics',    icon: BarChart2 },
-  { name: 'Notifications', href: '/dashboard/notifications', icon: Bell, badge: NOTIFICATION_COUNT },
+  { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
   { name: 'Settings',      href: '/dashboard/settings',     icon: Settings },
 ] as const;
 
@@ -42,15 +40,26 @@ interface NavLinksProps {
 
 const NavLinks: React.FC<NavLinksProps> = ({ pathname, onClose }) => {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
-  const [unreadCount, setUnreadCount] = useState(3);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const updateUnread = () => {
       try {
-        const readIds: string[] = JSON.parse(localStorage.getItem('sl_read_notifications') || '[]');
-        const deletedIds: string[] = JSON.parse(localStorage.getItem('sl_deleted_notifications') || '[]');
-        const seedUnread = ['n-1', 'n-2', 'n-3'].filter(id => !readIds.includes(id) && !deletedIds.includes(id)).length;
-        setUnreadCount(seedUnread);
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') || localStorage.getItem('sl_token') : null;
+        if (token) {
+          fetch('/api/notifications', {
+            headers: { Authorization: `Bearer ${token}` }
+          })
+            .then(r => r.ok ? r.json() : [])
+            .then(data => {
+              if (Array.isArray(data)) {
+                setUnreadCount(data.filter((n: any) => !n.read).length);
+              }
+            })
+            .catch(() => {});
+        } else {
+          setUnreadCount(0);
+        }
       } catch {}
     };
     updateUnread();

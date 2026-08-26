@@ -57,7 +57,7 @@ export class ScansController {
   @Post('create')
   @UseGuards(OptionalJwtAuthGuard)
   create(@Req() req: AuthRequest, @Body() body: any) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.scansService.create(userId, body);
   }
 
@@ -88,7 +88,7 @@ export class ScansController {
   @Delete('all')
   @UseGuards(OptionalJwtAuthGuard)
   removeAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.scansService.removeAll(userId);
   }
 
@@ -107,14 +107,14 @@ export class ScansController {
   @Get('stats')
   @UseGuards(OptionalJwtAuthGuard)
   getStats(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.scansService.getStats(userId);
   }
 
   @Get()
   @UseGuards(OptionalJwtAuthGuard)
   findAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.scansService.findAll(userId);
   }
 }

@@ -16,15 +16,10 @@ export class ReportsService {
   async findAll(userId: string) {
     if (this.prisma.connected) {
       try {
-        let reports = await this.prisma.report.findMany({
+        const reports = await this.prisma.report.findMany({
           where: userId ? { userId } : {},
           orderBy: { createdAt: 'desc' },
         });
-        if (reports.length === 0) {
-          reports = await this.prisma.report.findMany({
-            orderBy: { createdAt: 'desc' },
-          });
-        }
         return reports;
       } catch (err: any) {
         this.logger.warn(`DB reports findAll failed (${err.message})`);

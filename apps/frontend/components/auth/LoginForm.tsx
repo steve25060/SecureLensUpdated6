@@ -47,10 +47,17 @@ export default function LoginForm() {
       localStorage.setItem("sl_token", token);
 
       // Store user data
+      // Clear old session
+      localStorage.removeItem("securelens_workspaces_global");
+      localStorage.removeItem("securelens_live_scans");
+      localStorage.removeItem("securelens_live_findings");
+      localStorage.removeItem("securelens_reports_global");
+      localStorage.removeItem("securelens_active_scan_session");
+
       const userData = data?.user || {
-        id: 'test-user-1',
+        id: `user_${Date.now()}`,
         email: email.trim(),
-        name: email.split('@')[0] || 'Demo User',
+        name: email.split('@')[0] || 'User',
         role: 'USER',
       };
       

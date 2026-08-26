@@ -12,13 +12,13 @@ export class WorkspacesController {
 
   @Get()
   findAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.workspacesService.findAll(userId);
   }
 
   @Post()
   create(@Req() req: AuthRequest, @Body() dto: CreateWorkspaceDto) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.workspacesService.create(userId, dto);
   }
 

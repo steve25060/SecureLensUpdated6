@@ -11,19 +11,19 @@ export class ReportsController {
 
   @Get()
   findAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.reportsService.findAll(userId);
   }
 
   @Get('stats')
   getStats(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.reportsService.getStats(userId);
   }
 
   @Post()
   create(@Req() req: AuthRequest, @Body() body: any) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.reportsService.create(userId, body ?? {});
   }
 
@@ -34,7 +34,7 @@ export class ReportsController {
 
   @Delete('all')
   removeAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || 'demo-user-1';
+    const userId = req.user?.id || req.user?.userId || '';
     return this.reportsService.removeAll(userId);
   }
 

@@ -11,6 +11,6 @@ export class AnalyticsController {
 
   @Get('overview')
   getOverview(@Req() req: AuthRequest) {
-    return this.analyticsService.getOverview(req.user?.userId ?? req.user?.id ?? 'demo-user-1');
+    return this.analyticsService.getOverview(req.user?.userId ?? req.user?.id ?? '');
   }
 }
