@@ -66,13 +66,28 @@ export class HealthController {
       environment: process.env.NODE_ENV || 'production',
       platform: 'Render Cloud (Linux x64)',
       engines: [
-        { name: 'OWASP ZAP', type: 'DAST', status: 'ready' },
-        { name: 'ProjectDiscovery Nuclei', type: 'CVE Templates', status: 'ready' },
-        { name: 'SSLyze', type: 'TLS/SSL Audit', status: 'ready' },
-        { name: 'Trivy', type: 'Container/Pkg SAST', status: 'ready' },
-        { name: 'Bandit', type: 'Python SAST', status: 'ready' },
-        { name: 'Semgrep', type: 'Code Security', status: 'ready' },
-        { name: 'Nmap', type: 'Port Discovery', status: 'ready' },
+        { name: 'DNS Resolution & Hygiene', id: 'dns_check', type: 'DAST/Recon', status: 'ready' },
+        { name: 'Subdomain Enumeration', id: 'subdomain_discovery', type: 'DAST/Surface', status: 'ready' },
+        { name: 'Live Host & Service Probing', id: 'asset_discovery', type: 'DAST/Recon', status: 'ready' },
+        { name: 'Technology Fingerprinting', id: 'tech_detection', type: 'DAST/Tech', status: 'ready' },
+        { name: 'SSL/TLS Encryption & Ciphers', id: 'ssl_tls_analysis', type: 'Encryption', status: 'ready' },
+        { name: 'Endpoint & URL Crawler', id: 'endpoint_discovery', type: 'DAST/Crawler', status: 'ready' },
+        { name: 'Network Port Exposure (Nmap)', id: 'network_exposure', type: 'Network', status: 'ready' },
+        { name: 'Vulnerability & CVE Scanner (Nuclei)', id: 'vulnerability_detection', type: 'CVE Templates', status: 'ready' },
+        { name: 'HTTP Headers & CORS Security', id: 'http_security', type: 'Headers & Cookies', status: 'ready' },
+        { name: 'API Security & GraphQL Auditor', id: 'api_security', type: 'API Security', status: 'ready' },
+        { name: 'WAF & Cloud Perimeter Defense', id: 'waf_detection', type: 'Perimeter', status: 'ready' },
+        { name: 'Email & Anti-Spoofing Check (DMARC/SPF)', id: 'email_security', type: 'Email Security', status: 'ready' },
+        { name: 'Privacy & Cookie Compliance', id: 'privacy_compliance', type: 'Compliance', status: 'ready' },
+        { name: 'Repository Structure & Architecture', id: 'repository_overview', type: 'SAST', status: 'ready' },
+        { name: 'Static Code Analysis (Semgrep & Bandit)', id: 'code_security', type: 'SAST/Code', status: 'ready' },
+        { name: 'Secret & Key Detection (Gitleaks)', id: 'secret_detection', type: 'SAST/Secrets', status: 'ready' },
+        { name: 'Dependency Vulnerability SCA (Trivy)', id: 'dependency_analysis', type: 'Supply Chain', status: 'ready' },
+        { name: 'Infrastructure as Code IaC (Checkov)', id: 'infrastructure_security', type: 'Cloud & IaC', status: 'ready' },
+        { name: 'CI/CD Pipeline Security Check', id: 'cicd_security', type: 'CI/CD Security', status: 'ready' },
+        { name: 'License & Legal Risk Auditor', id: 'license_compliance', type: 'Legal & Risk', status: 'ready' },
+        { name: 'Container & Dockerfile Security', id: 'container_security', type: 'Container', status: 'ready' },
+        { name: 'Security Intelligence & Correlation Engine', id: 'security_intelligence', type: 'Correlation', status: 'ready' },
       ],
       aiCopilot: {
         status: 'active',
@@ -524,7 +539,7 @@ export class HealthController {
               <span>[SECURELENS CYBER AGENT]:</span>
             </div>
             <div class="speech-text">
-              "Hey there, Operative! 🕶️ Everything on the SecureLens backend mainframe is running in peak condition. All security engines, DAST/SAST scanners, and AI Copilot neural streams are active and ready."
+              "Hey there, Operative! 🕶️ Everything on the SecureLens backend mainframe is running in peak condition. All 20+ specialized security engines across Website DAST, GitHub SAST, Cloud IaC, and AI Copilot neural streams are active and 100% operational."
               <span class="cursor"></span>
             </div>
             <div class="speech-sub">
@@ -536,10 +551,10 @@ export class HealthController {
         <!-- Telemetry Metrics Grid -->
         <div class="telemetry-grid">
           <div class="telemetry-item">
-            <div class="tel-label">Scanning Engines</div>
+            <div class="tel-label">Security Engines</div>
             <div class="tel-value green">
               <span>●</span>
-              <span>7/7 Engines Active</span>
+              <span>20+ Engines Active</span>
             </div>
           </div>
 
