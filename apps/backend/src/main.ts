@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
@@ -68,8 +68,15 @@ async function bootstrap() {
     }),
   );
 
-  // Set global API prefix
-  app.setGlobalPrefix('api');
+  // Set global API prefix but exclude root and health routes so visiting the root backend URL renders the status landing page
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: '/', method: RequestMethod.GET },
+      { path: '/health', method: RequestMethod.GET },
+      { path: '/ping', method: RequestMethod.GET },
+      { path: '/status', method: RequestMethod.GET },
+    ],
+  });
 
   // Get port from environment
   const port = process.env.PORT || 4000;
