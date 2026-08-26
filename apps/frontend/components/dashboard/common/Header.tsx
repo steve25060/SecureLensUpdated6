@@ -161,18 +161,18 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="w-full flex items-center justify-between bg-background-secondary/80 backdrop-blur-xl border-b border-white/[0.04] px-6 py-3.5 z-30">
-      <div className="flex items-center gap-6">
-        <div>
-          <h1 className="text-lg font-bold text-white tracking-tight">{pageTitle}</h1>
-          <p className="text-xs text-gray-500 mt-0.5">
+    <header className="w-full flex items-center justify-between bg-background-secondary/80 backdrop-blur-xl border-b border-white/[0.04] pl-16 pr-4 md:px-6 py-3.5 z-30 min-w-0">
+      <div className="flex items-center gap-3 sm:gap-6 min-w-0">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">{pageTitle}</h1>
+          <p className="text-[11px] sm:text-xs text-gray-500 mt-0.5 truncate hidden xs:block">
             {pathname === '/dashboard' ? 'Welcome back! Here\'s your security overview.' : `Manage your ${pageTitle.toLowerCase()}`}
           </p>
         </div>
       </div>
 
       {/* Real-time Clock & Live Engine Sync Status */}
-      <div className="hidden lg:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs">
+      <div className="hidden xl:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs shrink-0">
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -188,25 +188,20 @@ const Header: React.FC = () => {
         </span>
       </div>
 
-      <div className="flex items-center gap-2.5">
-        <motion.div
-          className={`relative transition-all duration-300 ${searchFocused ? 'w-80' : 'w-64'}`}
-          animate={{ width: searchFocused ? 320 : 240 }}
-        >
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        <div className="relative hidden md:block w-44 lg:w-60">
           <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search findings, assets... (Enter)"
+            placeholder="Search findings... (Enter)"
             onKeyDown={handleSearchSubmit}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            className="w-full rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-gray-300 placeholder-gray-500 pl-9 pr-4 py-2 outline-none focus:border-violet-500/50 focus:bg-white/[0.06] transition-all duration-200"
+            className="w-full rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm text-gray-300 placeholder-gray-500 pl-9 pr-4 py-1.5 outline-none focus:border-violet-500/50 focus:bg-white/[0.06] transition-all duration-200"
             aria-label="Global search"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-[10px] text-gray-600 pointer-events-none">
             <kbd className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] font-mono">↵</kbd>
           </div>
-        </motion.div>
+        </div>
 
         <div className="relative" ref={notifRef}>
           <motion.button

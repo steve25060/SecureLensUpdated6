@@ -2146,8 +2146,8 @@ function LiveScanContent() {
         </div>
 
         {/* ─── Status sidebar ────────────────────────────────────────────────── */}
-        <div className="space-y-5">
-          <motion.div variants={itemVariants} className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-6 space-y-4 sticky top-6">
+        <div className="space-y-5 lg:sticky lg:top-6 self-start">
+          <motion.div variants={itemVariants} className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-6 space-y-4">
             <h2 className="text-lg font-semibold text-white">Scan Status</h2>
 
             {scanStatus === 'idle' ? (
