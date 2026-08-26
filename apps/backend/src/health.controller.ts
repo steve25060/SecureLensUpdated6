@@ -568,23 +568,12 @@ export class HealthController {
           </div>
         </div>
 
-        <!-- Call to Action Buttons -->
+        <!-- Call to Action Button -->
         <div class="cta-container">
           <a href="${frontendUrl}" target="_blank" rel="noopener noreferrer" class="btn-frontend">
             <span>ENTER SECURELENS PLATFORM</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </a>
-
-          <div class="secondary-row">
-            <a href="/api/health" class="btn-secondary">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-              <span>RAW TELEMETRY JSON</span>
-            </a>
-            <a href="/api/ping" class="btn-secondary">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              <span>PING MAINFRAME</span>
-            </a>
-          </div>
         </div>
       </div>
     </div>
