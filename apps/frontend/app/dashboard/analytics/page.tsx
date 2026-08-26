@@ -116,7 +116,7 @@ export default function AnalyticsPage() {
             id: `syn-${s.id}-${i + 1}`,
             title: `${cat} in ${s.target.replace(/^https?:\/\//, '')}`,
             severity: sev,
-            source: isGithub ? 'Semgrep & Gitleaks' : 'Nuclei & ZAP Engine',
+            source: isGithub ? 'SecureLens SAST & Secret Hunter' : 'SecureLens DAST & CVE Engine',
             target: s.target,
             status: 'NEW',
             category: cat,
@@ -130,15 +130,15 @@ export default function AnalyticsPage() {
 
     if (list.length === 0) {
       return [
-        { id: 'f-1', title: 'SQL Injection in /api/auth/login', severity: 'CRITICAL', source: 'OWASP ZAP Engine', category: 'Injection Flaws', cvss: 9.8 },
-        { id: 'f-2', title: 'Exposed AWS Production Secret Access Key', severity: 'CRITICAL', source: 'Gitleaks Scanner', category: 'Secret Exposure', cvss: 9.6 },
-        { id: 'f-3', title: 'Remote Code Execution via Log4j (CVE-2021-44228)', severity: 'CRITICAL', source: 'Nuclei Scanner', category: 'Supply Chain', cvss: 9.9 },
+        { id: 'f-1', title: 'SQL Injection in /api/auth/login', severity: 'CRITICAL', source: 'SecureLens Vulnerability Engine', category: 'Injection Flaws', cvss: 9.8 },
+        { id: 'f-2', title: 'Exposed AWS Production Secret Access Key', severity: 'CRITICAL', source: 'SecureLens Secret Hunter', category: 'Secret Exposure', cvss: 9.6 },
+        { id: 'f-3', title: 'Remote Code Execution via Log4j (CVE-2021-44228)', severity: 'CRITICAL', source: 'SecureLens Dependency Guard', category: 'Supply Chain', cvss: 9.9 },
         { id: 'f-4', title: 'Missing Content-Security-Policy (CSP) Header', severity: 'HIGH', source: 'SecureLens Header Audit', category: 'Security Headers', cvss: 7.5 },
-        { id: 'f-5', title: 'Cross-Site Scripting (Reflected XSS) in Search', severity: 'HIGH', source: 'OWASP ZAP Engine', category: 'XSS Flaws', cvss: 7.2 },
-        { id: 'f-6', title: 'Weak TLS 1.0 & 1.1 Cipher Suites Enabled', severity: 'MEDIUM', source: 'SSL/TLS Inspector', category: 'SSL/TLS Configuration', cvss: 5.8 },
-        { id: 'f-7', title: 'CORS Wildcard (*) Origin Configuration', severity: 'MEDIUM', source: 'API Security Engine', category: 'API Vulnerability', cvss: 5.4 },
+        { id: 'f-5', title: 'Cross-Site Scripting (Reflected XSS) in Search', severity: 'HIGH', source: 'SecureLens Web Application Scanner', category: 'XSS Flaws', cvss: 7.2 },
+        { id: 'f-6', title: 'Weak TLS 1.0 & 1.1 Cipher Suites Enabled', severity: 'MEDIUM', source: 'SecureLens SSL/TLS Auditor', category: 'SSL/TLS Configuration', cvss: 5.8 },
+        { id: 'f-7', title: 'CORS Wildcard (*) Origin Configuration', severity: 'MEDIUM', source: 'SecureLens API Security Engine', category: 'API Vulnerability', cvss: 5.4 },
         { id: 'f-8', title: 'Missing Strict-Transport-Security (HSTS)', severity: 'LOW', source: 'SecureLens Header Audit', category: 'Security Headers', cvss: 3.8 },
-        { id: 'f-9', title: 'Server Header Leaking Nginx Version 1.18', severity: 'LOW', source: 'Nuclei Scanner', category: 'Information Disclosure', cvss: 3.1 },
+        { id: 'f-9', title: 'Server Header Leaking Nginx Version 1.18', severity: 'LOW', source: 'SecureLens Recon Engine', category: 'Information Disclosure', cvss: 3.1 },
       ];
     }
     return list;

@@ -37,28 +37,50 @@ export const DOC_TOPICS: DocTopic[] = [
     description: 'Learn how to configure SecureLens, set up workspaces, and run your first multi-vector scan in under 2 minutes.',
     icon: '🚀',
     readTime: '3 min read',
-    overview: 'SecureLens combines open-source intelligence (OSINT), active dynamic testing (DAST), static application security testing (SAST), and secrets detection into a single automated pipeline.',
+    overview: 'SecureLens unifies Dynamic Application Security Testing (DAST), Static Code Analysis (SAST), Secret Hunting, and Cloud Posture into a single automated security intelligence pipeline.',
     sections: [
       {
-        heading: '1. Create or Select a Workspace',
-        content: 'Workspaces group your web domains, API endpoints, and GitHub repositories into isolated security perimeters with dedicated risk scoring and history tracking.',
+        heading: '1. Workspace Setup & Target Definition',
+        content: 'Workspaces group your web applications, API endpoints, cloud perimeters, and GitHub repositories into isolated security scopes with dedicated risk scoring and history tracking.',
         keyPoints: [
           'Navigate to Dashboard → Workspaces to add a new production or staging target.',
-          'Specify your Website URL (e.g., https://example.com) or GitHub Repo URL.',
-          'Workspaces automatically synchronize across Live Scan and Copilot.'
+          'Specify your Website URL (e.g. https://example.com) or GitHub repository link.',
+          'Workspaces automatically synchronize configurations across Live Scan and AI Copilot.'
         ]
       },
       {
-        heading: '2. Launch a Live Security Scan',
-        content: 'Select your target workspace and choose from 3 scanning modes: Website Analysis, GitHub Source Scan, or Full Combined Audit.',
+        heading: '2. Selecting Scan Modes & Intensity Profiles',
+        content: 'Choose from 3 specialized scanning modes and calibrated profiles tailored for your infrastructure:',
+        keyPoints: [
+          '🌐 Website DAST: External attack surface mapping, SSL/TLS cipher audits, security headers, open ports, and web application CVE probing.',
+          '💻 GitHub SAST: Deep static code analysis, leaked secrets/credentials hunting, and software supply chain dependency audits.',
+          '⚡ Combined Full-Stack: Comprehensive multi-vector audit correlating perimeter exposure with underlying source code vulnerabilities.',
+          'Profiles available: Fast Recon (30s), Standard Balanced (2m), Deep Aggressive Audit (4m), and Compliance Matrix.'
+        ],
         codeSnippet: {
           language: 'bash',
-          code: `# Launch a live automated scan via cURL API\ncurl -X POST https://securelens-backend-o213.onrender.com/api/scans \\\n  -H "Authorization: Bearer <YOUR_JWT_TOKEN>" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "targetUrl": "https://uptoskills.com",\n    "mode": "WEBSITE",\n    "profile": "deep_cloud_api",\n    "engines": ["ZAP", "NUCLEI", "NIKTO", "WAPITI"]\n  }'`
+          code: `# Launch an automated multi-vector scan via SecureLens API
+curl -X POST https://securelens-backend-o213.onrender.com/api/scans/website \\
+  -H "Authorization: Bearer <YOUR_SECURELENS_API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "target": "https://example.com",
+    "mode": "website",
+    "profile": "normal",
+    "engines": [
+      "dns_check",
+      "asset_discovery",
+      "ssl_tls_analysis",
+      "vulnerability_detection",
+      "http_security",
+      "api_security"
+    ]
+  }'`
         }
       },
       {
-        heading: '3. Real-Time Telemetry & AI Correlation',
-        content: 'Watch live terminal outputs as engines execute in parallel. Once completed, SecureLens correlates findings, calculates an updated risk score (0-100), and generates AI fix suggestions.'
+        heading: '3. Real-Time Telemetry & AI Finding Correlation',
+        content: 'Monitor live terminal outputs as SecureLens engines execute in parallel. Once completed, the Security Intelligence Engine correlates alerts, deduplicates findings, calculates an updated 0-100 Security Posture Score, and generates AI-assisted remediation patches.'
       }
     ]
   },
@@ -69,23 +91,51 @@ export const DOC_TOPICS: DocTopic[] = [
     description: 'Explore, author, and deploy custom vulnerability scanning templates and declarative rulesets.',
     icon: '📋',
     readTime: '5 min read',
-    overview: 'SecureLens utilizes industry-standard YAML templates compatible with Nuclei, Semgrep, and custom heuristic analyzers for automated signature matching.',
+    overview: 'SecureLens provides an extensible declarative template engine allowing security teams to author custom vulnerability detectors, proprietary API checks, and corporate compliance guardrails in YAML.',
     sections: [
       {
-        heading: 'Authoring a Custom Nuclei Template',
-        content: 'Define custom protocols, matchers, and severity levels to detect proprietary endpoints, exposed secrets, or compliance violations.',
+        heading: 'Authoring Declarative Security Templates',
+        content: 'Define custom protocols, HTTP matchers, word/regex extractors, and severity levels to detect proprietary endpoints, exposed secrets, or compliance violations:',
         codeSnippet: {
           language: 'yaml',
-          code: `id: custom-auth-bypass-check\ninfo:\n  name: JWT Missing Signature & None Algorithm\n  author: securelens-security\n  severity: high\n  description: Detects API endpoints accepting unsigned JWT tokens\n  tags: jwt, auth, cve, custom\n\nhttp:\n  - method: GET\n    path:\n      - "{{BaseURL}}/api/v1/auth/verify"\n    headers:\n      Authorization: "Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiJ9."\n    matchers-condition: and\n    matchers:\n      - type: status\n        status:\n          - 200\n      - type: word\n        words:\n          - '"status":"authenticated"'`
+          code: `id: securelens-custom-auth-bypass-check
+info:
+  name: Unsigned JWT Token & Alg None Acceptance
+  author: securelens-security
+  severity: critical
+  description: Detects API endpoints accepting forged or unsigned JSON Web Tokens
+  remediation: Ensure JWT verification strictly enforces cryptographic signature algorithms (e.g. RS256/HS256).
+  tags: [jwt, auth, api, custom]
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/auth/verify"
+      - "{{BaseURL}}/api/v1/user/profile"
+    headers:
+      Authorization: "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhZG1pbiIsImlhdCI6MTUxNjIzOTAyMn0."
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        words:
+          - '"authenticated":true'
+          - '"role":"admin"'`
         }
       },
       {
-        heading: 'Pre-built Profile Presets',
-        content: 'Choose from calibrated scanning profiles tailored for specific environments:',
+        heading: 'Custom Static Code Rulesets (SAST)',
+        content: 'Create pattern-based AST rules to catch insecure coding patterns, unparameterized database queries, hardcoded credentials, or disabled SSL verification in source repositories.'
+      },
+      {
+        heading: 'Built-in Rule Packs & Profile Presets',
+        content: 'Select from pre-configured scanning rule packs optimized for specific audit scenarios:',
         keyPoints: [
-          '⚡ Fast Recon: Quick HTTP headers, SSL/TLS ciphers, DNS enumeration, and open ports (30s).',
-          '🛡️ OWASP Top 10: In-depth SQLi, XSS, SSRF, CSRF, and broken access control probing (2-3 min).',
-          '☁️ Deep Cloud & API: Full container, S3 bucket leak, GraphQL introspection, and JWT audits (4-5 min).'
+          '🛡️ OWASP Top 10 Core Pack: Injection flaws (SQLi/XSS), SSRF, IDOR, and Broken Access Control.',
+          '☁️ Cloud & API Perimeter Pack: GraphQL introspection, Swagger document exposure, and CORS misconfigurations.',
+          '🔑 Supply Chain & Secrets Guard: Comprehensive pattern library detecting 120+ cloud tokens, API keys, and private certs.',
+          '📜 Regulatory Compliance Pack: Audits headers and security configurations against PCI-DSS, HIPAA, and GDPR standards.'
         ]
       }
     ]
@@ -97,29 +147,52 @@ export const DOC_TOPICS: DocTopic[] = [
     description: 'Complete API endpoints documentation for CI/CD automation, custom integrations, and data exports.',
     icon: '⚙️',
     readTime: '4 min read',
-    overview: 'SecureLens provides a modern RESTful API protected by JWT Bearer tokens and API keys. All responses return JSON structured under standardized schemas.',
+    overview: 'Integrate SecureLens programmatically into your CI/CD pipelines, internal security dashboards, and SIEM systems using our high-throughput REST API.',
     sections: [
       {
-        heading: 'Authentication & Headers',
-        content: 'Include your JWT or API key in the Authorization header of every request:',
+        heading: 'Authentication & Base Configuration',
+        content: 'Include your JWT token or Organization API key in the Authorization header of every request:',
         codeSnippet: {
           language: 'http',
-          code: `GET /api/scans HTTP/1.1\nHost: securelens-backend-o213.onrender.com\nAuthorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\nContent-Type: application/json`
+          code: `POST /api/scans/website HTTP/1.1
+Host: securelens-backend-o213.onrender.com
+Authorization: Bearer <YOUR_SECURELENS_API_KEY>
+Content-Type: application/json`
         }
       },
       {
-        heading: 'Core API Endpoints',
-        content: 'Key endpoints for orchestrating scans and querying vulnerabilities:',
+        heading: 'Core API Endpoint Directory',
+        content: 'Key REST endpoints for orchestrating scans, streaming telemetry, and querying findings:',
         keyPoints: [
-          'POST /api/scans — Initiate an automated scan session (async).',
-          'GET /api/scans/:id/status — Stream live progress percentage, engine states, and active phase.',
-          'GET /api/scans/:id/logs — Fetch real-time streaming engine terminal logs.',
-          'GET /api/findings — Query normalized vulnerability findings with severity filters.',
-          'POST /api/ai-copilot/analyze — Generate AI remediation diffs and security patch code.'
-        ],
+          'POST /api/auth/login — User authentication and JWT generation.',
+          'POST /api/scans/website — Initiate a dynamic web application vulnerability scan.',
+          'POST /api/scans/github — Initiate static code analysis and dependency audit on a git repository.',
+          'GET /api/scans — Retrieve scan history, filter by status, target, and risk score.',
+          'GET /api/scans/:id — Query real-time scan progress, active phase, and telemetry logs.',
+          'GET /api/findings — Query correlated security findings with severity, CVE, and category filters.',
+          'POST /api/ai/chat — Request AI Copilot remediation patches and guided code fixes.',
+          'GET /api/reports/:id/pdf — Export formal executive and compliance audit reports in PDF.'
+        ]
+      },
+      {
+        heading: 'Standardized Finding Response Schema',
+        content: 'All findings are normalized under a unified schema with CVSS scores, CWE mappings, and remediation guidance:',
         codeSnippet: {
           language: 'json',
-          code: `{\n  "id": "scan_4f92c10a",\n  "status": "completed",\n  "score": 88,\n  "target": "https://uptoskills.com",\n  "mode": "WEBSITE",\n  "findingsCount": 4,\n  "enginesExecuted": ["ZAP", "NUCLEI", "NIKTO"],\n  "durationMs": 42100\n}`
+          code: `{
+  "id": "find_8b91a20c",
+  "scanId": "scan_4f92c10a",
+  "title": "Missing Content-Security-Policy (CSP) Header",
+  "severity": "MEDIUM",
+  "category": "Headers & Cookies",
+  "cvss": 5.4,
+  "cwe": "CWE-693",
+  "target": "https://example.com",
+  "description": "The web server response does not include a Content-Security-Policy header, leaving the application vulnerable to cross-site scripting (XSS).",
+  "remediation": "Configure a strict Content-Security-Policy response header restricting script and object sources.",
+  "status": "OPEN",
+  "createdAt": "2026-08-26T15:00:00.000Z"
+}`
         }
       }
     ]
@@ -134,27 +207,27 @@ export const DOC_TOPICS: DocTopic[] = [
     overview: 'Maximize security posture while eliminating false positive alert fatigue by adhering to proactive DevSecOps practices.',
     sections: [
       {
-        heading: '1. Shift Left with Pre-commit & CI/CD Checks',
-        content: 'Catch secret leaks and vulnerable dependencies before code is merged into production branches.',
+        heading: '1. Shift-Left Security Pipeline',
+        content: 'Catch secret leaks and vulnerable dependencies before code is merged into production branches:',
         keyPoints: [
-          'Run Gitleaks and Semgrep rules on every pull request.',
-          'Block merges if Critical CVEs or hardcoded credentials are detected.',
-          'Set automated weekly baseline scans for all deployed staging and production endpoints.'
+          'Run SecureLens Secret Hunter and Static Application Security Testing (SAST) engines on every pull request.',
+          'Enforce automated merge blocking if Critical CVEs or hardcoded credentials are detected.',
+          'Schedule automated weekly baseline scans for all deployed staging and production endpoints.'
         ]
       },
       {
         heading: '2. Remediation SLAs by Severity',
         content: 'Establish clear internal SLAs for vulnerability resolution:',
         keyPoints: [
-          '🔴 Critical (Score 9.0-10.0): Remediate or mitigate within 24 hours.',
-          '🟠 High (Score 7.0-8.9): Remediate within 7 calendar days.',
-          '🟡 Medium (Score 4.0-6.9): Address within standard 2-week sprint cycle.',
-          '🔵 Low / Info: Review during regular maintenance windows.'
+          '🔴 Critical (Score 9.0–10.0): Remediate or apply mitigation within 24 hours.',
+          '🟠 High (Score 7.0–8.9): Remediate within 7 calendar days.',
+          '🟡 Medium (Score 4.0–6.9): Resolve within the standard 2-week sprint cycle.',
+          '🔵 Low / Informational: Address during regular maintenance and technical debt cycles.'
         ]
       },
       {
-        heading: '3. Safe Scanning of Production Assets',
-        content: 'When scanning live production surfaces, use Fast Recon or OWASP Top 10 profiles to minimize server load and prevent denial-of-service or database write side-effects.'
+        heading: '3. Safe Production Scanning Protocols',
+        content: 'When scanning live production surfaces, use Fast Recon or Standard Balanced profiles to ensure non-invasive auditing without latency spikes, and schedule deep crawls during off-peak maintenance windows.'
       }
     ]
   },
@@ -168,20 +241,45 @@ export const DOC_TOPICS: DocTopic[] = [
     overview: 'Embed continuous security testing seamlessly into your existing developer toolchains and notification channels.',
     sections: [
       {
-        heading: 'GitHub Actions Workflow',
+        heading: 'GitHub Actions Workflow Integration',
         content: 'Add automated security gating to your repository with a single workflow file:',
         codeSnippet: {
           language: 'yaml',
-          code: `name: SecureLens Security Gate\non:\n  push:\n    branches: [ main ]\n  pull_request:\n    branches: [ main ]\n\njobs:\n  security-scan:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout Code\n        uses: actions/checkout@v4\n\n      - name: Run SecureLens Scan\n        run: |\n          RESPONSE=$(curl -s -X POST https://securelens-backend-o213.onrender.com/api/scans \\\n            -H "Authorization: Bearer \${{ secrets.SECURELENS_API_KEY }}" \\\n            -H "Content-Type: application/json" \\\n            -d "{\\"repoUrl\\": \\"\${{ github.server_url }}/\${{ github.repository }}\\", \\"mode\\": \\"GITHUB\\"}")\n          echo "Scan initiated: $RESPONSE"`
+          code: `name: SecureLens Security Gate
+on:
+  push:
+    branches: [ main, staging ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-audit:
+    name: SecureLens Automated Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Trigger SecureLens SAST & Secret Scan
+        run: |
+          curl -s -X POST https://securelens-backend-o213.onrender.com/api/scans/github \\
+            -H "Authorization: Bearer \${{ secrets.SECURELENS_API_KEY }}" \\
+            -H "Content-Type: application/json" \\
+            -d '{
+              "repoUrl": "\${{ github.server_url }}/\${{ github.repository }}",
+              "mode": "github",
+              "profile": "normal"
+            }'`
         }
       },
       {
-        heading: 'Supported Third-Party Ecosystem',
-        content: 'SecureLens natively connects with:',
+        heading: 'Alerting & Webhook Ecosystem',
+        content: 'SecureLens natively connects with your operational notification channels:',
         keyPoints: [
-          '🔔 Slack / Discord: Real-time webhook notifications for Critical & High security alerts.',
-          '📋 Jira & Linear: One-click export of findings into trackable engineering bug tickets.',
-          '🐳 Docker & Kubernetes: Container image scanning via integrated Trivy engine.'
+          '🔔 Slack & Microsoft Teams: Real-time webhook notifications for Critical & High security alerts.',
+          '📋 Jira & Linear: One-click export of findings into trackable engineering bug tickets with remediation diffs.',
+          '🐳 Container & Docker Registries: Continuous image auditing via SecureLens Container Security Engine.',
+          '📊 SIEM & Analytics: Stream structured finding telemetry to centralized log systems via webhooks.'
         ]
       }
     ]
@@ -193,28 +291,31 @@ export const DOC_TOPICS: DocTopic[] = [
     description: 'Diagnostic guides and solutions for common connection, hibernation, and scan execution scenarios.',
     icon: '🔧',
     readTime: '3 min read',
-    overview: 'Quick answers and remediation steps for network, authentication, and engine execution questions.',
+    overview: 'Quick answers and remediation steps for network connectivity, authentication, and scan execution questions.',
     sections: [
       {
         heading: 'Render Cloud Free-Tier Hibernation (502 / 503)',
-        content: 'Free cloud containers go into sleep mode after 15 minutes of inactivity. When a request is received, Render initiates a container cold start which takes 30-50 seconds.',
+        content: 'Free cloud containers go into sleep mode after 15 minutes of inactivity. When a request is received, the host initiates a cold start which takes 30-50 seconds:',
         keyPoints: [
           'Wait 30-45 seconds on initial load while the backend container wakes up.',
-          'SecureLens includes an automatic retry client and offline fallback mode so the UI remains interactive.',
+          'SecureLens includes an automatic retry client and offline fallback mode so the UI remains fully responsive.',
           'Once awake, subsequent scans and API requests respond in sub-seconds.'
         ]
       },
       {
-        heading: 'OAuth Redirect / Callback Troubleshooting',
+        heading: 'OAuth Redirect & Callback Configuration',
         content: 'If Google or GitHub login returns an error, verify that the Authorized Redirect URI in your developer console matches your deployment URL:',
         codeSnippet: {
           language: 'text',
-          code: `Authorized Redirect URIs:\nhttps://securelens-backend-o213.onrender.com/api/auth/google/callback\nhttps://securelens-backend-o213.onrender.com/api/auth/github/callback\nhttps://securelens-frontend.onrender.com/callback`
+          code: `Authorized Redirect URIs:
+https://securelens-backend-o213.onrender.com/api/auth/google/callback
+https://securelens-backend-o213.onrender.com/api/auth/github/callback
+https://securelens-frontend.onrender.com/callback`
         }
       },
       {
-        heading: 'Large Repository Scan Timeouts',
-        content: 'If a repository contains over 50,000 files, static analysis may exceed execution limits. Exclude large binary folders or vendor directories (.git, node_modules, dist, vendor) in your scan configuration.'
+        heading: 'Large Repository Performance Optimization',
+        content: 'For codebases containing over 50,000 files, ensure build artifacts (dist, node_modules, .git, vendor) are excluded from static analysis to optimize scan execution times.'
       }
     ]
   }

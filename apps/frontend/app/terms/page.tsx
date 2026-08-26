@@ -43,7 +43,7 @@ const SECTIONS = [
         <p>Under these Terms, you agree that you shall NOT:</p>
         <ul className="list-disc pl-5 space-y-2 text-xs text-gray-300">
           <li>Initiate denial-of-service (DoS/DDoS) floods, stress attacks, or resource exhaustion vectors against non-consenting target hosts.</li>
-          <li>Utilize SecureLens engines (such as Nuclei, Katana, TestSSL, GitLeaks, or WAF probes) against government, critical infrastructure, financial institutions, or third-party web properties without formal contractual permission.</li>
+          <li>Utilize SecureLens engines (such as Dynamic Web Scanners, Static Code Analyzers, Secret Hunters, or Perimeter Probes) against government, critical infrastructure, financial institutions, or third-party web properties without formal contractual permission.</li>
           <li>Attempt to weaponize, exploit, or distribute discovered zero-day vulnerabilities or extracted credentials obtained via the Service for malicious intent.</li>
           <li>Circumvent rate limits, IP restrictions, or scanning profiles configured on the platform.</li>
         </ul>
@@ -68,7 +68,7 @@ const SECTIONS = [
               <Globe size={13} /> Dynamic Web & API Scans (DAST)
             </span>
             <p className="text-[11px] text-gray-400 leading-relaxed">
-              Automated DNS resolution, SSL/TLS cipher validation, Katana web crawling, WAF fingerprinting, OWASP Top 10 fuzzing, and Nuclei security template execution.
+              Automated DNS resolution, SSL/TLS cipher validation, web endpoint crawling, WAF fingerprinting, OWASP Top 10 fuzzing, and declarative vulnerability template execution.
             </p>
           </div>
           <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-1">
@@ -76,7 +76,7 @@ const SECTIONS = [
               <Lock size={13} /> Source Code & Secret Audits (SAST)
             </span>
             <p className="text-[11px] text-gray-400 leading-relaxed">
-              GitLeaks & TruffleHog regex token detection, Semgrep AST semantic code analysis, Dockerfile misconfiguration checks, and Software Bill of Materials (SBOM) dependency audits.
+              Pattern token detection, AST semantic code analysis, Dockerfile misconfiguration checks, and Software Bill of Materials (SBOM) dependency audits.
             </p>
           </div>
           <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.04] space-y-1">

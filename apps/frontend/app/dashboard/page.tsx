@@ -210,7 +210,7 @@ export default function DashboardPage() {
             id: `syn-${s.id}-${i + 1}`,
             title: `${cat} in ${s.target.replace(/^https?:\/\//, '')}`,
             severity: sev,
-            source: isGithub ? 'Semgrep & Gitleaks' : 'Nuclei & ZAP Engine',
+            source: isGithub ? 'SecureLens SAST & Secret Hunter' : 'SecureLens DAST & CVE Engine',
             target: s.target,
             status: 'NEW',
             category: cat,
@@ -243,8 +243,8 @@ export default function DashboardPage() {
     const authFindings = allFindings.filter(f => (f.category || '').toLowerCase().includes('auth') || f.title.toLowerCase().includes('auth') || f.title.toLowerCase().includes('jwt') || f.title.toLowerCase().includes('token'));
     const apiFindings = allFindings.filter(f => (f.category || '').toLowerCase().includes('api') || f.title.toLowerCase().includes('api') || f.title.toLowerCase().includes('swagger') || f.title.toLowerCase().includes('openapi'));
     const headerFindings = allFindings.filter(f => (f.category || '').toLowerCase().includes('header') || f.title.toLowerCase().includes('csp') || f.title.toLowerCase().includes('hsts') || f.title.toLowerCase().includes('cors'));
-    const depFindings = allFindings.filter(f => (f.category || '').toLowerCase().includes('supply') || (f.category || '').toLowerCase().includes('depend') || f.title.toLowerCase().includes('cve-') || (f.source || '').toLowerCase().includes('trivy'));
-    const secretFindings = allFindings.filter(f => (f.category || '').toLowerCase().includes('secret') || f.title.toLowerCase().includes('key') || f.title.toLowerCase().includes('credential') || (f.source || '').toLowerCase().includes('gitleaks'));
+    const depFindings = allFindings.filter(f => (f.category || '').toLowerCase().includes('supply') || (f.category || '').toLowerCase().includes('depend') || f.title.toLowerCase().includes('cve-') || (f.source || '').toLowerCase().includes('dependency'));
+    const secretFindings = allFindings.filter(f => (f.category || '').toLowerCase().includes('secret') || f.title.toLowerCase().includes('key') || f.title.toLowerCase().includes('credential') || (f.source || '').toLowerCase().includes('secret'));
 
     const getScoreLabel = (sc: number) => {
       if (sc >= 85) return 'Excellent';
@@ -474,7 +474,7 @@ export default function DashboardPage() {
               </div>
               <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight">Your Security Dashboard is Ready for Scans</h2>
               <p className="text-sm text-gray-400 leading-relaxed">
-                Run an automated audit on your website URL or GitHub repository. SecureLens will execute nuclei, semgrep, gitleaks, and OWASP ZAP scanners to populate your live risk scores and compliance telemetry.
+                Run an automated audit on your website URL or GitHub repository. SecureLens will execute multi-vector DAST, SAST, secret hunting, and CVE scanning engines to populate your live risk scores and compliance telemetry.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">

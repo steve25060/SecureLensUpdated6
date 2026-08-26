@@ -107,7 +107,7 @@ function auditDirectCodeFile(fileName: string, content: string): CodeAuditFindin
   const findings: CodeAuditFinding[] = [];
   const lines = content.split('\n');
 
-  // 1. Secret Detection (Gitleaks Engine)
+  // 1. Secret & Token Detection Engine
   const secretChecks = [
     { title: 'Exposed AWS Access Key ID', severity: 'CRITICAL' as const, regex: /(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/, source: 'Secret Detection', cwe: 'CWE-798', remediation: 'Revoke key in AWS IAM and generate a new key with least privilege.' },
     { title: 'Exposed AWS Secret Access Key', severity: 'CRITICAL' as const, regex: /aws[_\-]?secret[_\-]?access[_\-]?key.*?['":=]\s*['"]?([a-zA-Z0-9\/+=]{40})['"]?/i, source: 'Secret Detection', cwe: 'CWE-798', remediation: 'Rotate AWS IAM Secret Key immediately.' },
@@ -118,7 +118,7 @@ function auditDirectCodeFile(fileName: string, content: string): CodeAuditFindin
     { title: 'Hardcoded JWT Secret Key', severity: 'HIGH' as const, regex: /(?:jwt_secret|jwt_key|secret_or_key|token_secret)\s*[:=]\s*['"][a-zA-Z0-9!@#$%^&*()_+=-]{6,40}['"]/i, source: 'Secret Detection', cwe: 'CWE-798', remediation: 'Store JWT secret in encrypted environment variables.' },
   ];
 
-  // 2. Code Security SAST (Semgrep Engine)
+  // 2. Code Security SAST Engine
   const sastChecks = [
     { title: 'SQL Injection via Unparameterized Concatenation', severity: 'CRITICAL' as const, regex: /(?:\.query|\.execute|\.raw|db\.run|cursor\.execute)\s*\(\s*(?:`[^`]*\$\{[^}]+\}[^`]*`|"[^"]*"\s*\+\s*[a-zA-Z0-9_.]+|'[^']*'\s*\+\s*[a-zA-Z0-9_.]+)/, source: 'Code Security Check', cwe: 'CWE-89', remediation: 'Use parameterized prepared statements ($1, ?).' },
     { title: 'OS Command Injection via Unsanitized Shell Execution', severity: 'CRITICAL' as const, regex: /(?:exec|execSync|spawn|system|popen|subprocess\.call)\s*\(\s*(?:`[^`]*\$\{[^}]+\}[^`]*`|req\.(?:query|body|params))/i, source: 'Code Security Check', cwe: 'CWE-78', remediation: 'Use execFile with argument arrays instead of raw shell execution.' },
@@ -1232,7 +1232,7 @@ function LiveScanContent() {
             severity: f.severity,
             source: f.source,
             target: scanTarget,
-            category: (f as any).category || (f.source.includes('Code') || f.source.includes('Secret') || f.source.includes('Gitleaks') || f.source.includes('Semgrep') ? 'Code Security' : 'Web Surface'),
+            category: (f as any).category || (f.source.includes('Code') || f.source.includes('Secret') || f.source.includes('SAST') || f.source.includes('Dependency') ? 'Code Security' : 'Web Surface'),
             cwe: (f as any).cwe,
             remediation: (f as any).remediation,
             description: (f as any).description || `Correlated finding detected across combined web & source audit of ${scanTarget}`,
