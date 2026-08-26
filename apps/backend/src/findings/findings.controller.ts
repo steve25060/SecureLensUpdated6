@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Delete, Param, Query, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, Query, Body, UseGuards, Req } from '@nestjs/common';
 import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
 import { FindingsService } from './findings.service';
 
@@ -8,13 +8,15 @@ export class FindingsController {
   constructor(private readonly findingsService: FindingsService) {}
 
   @Get()
-  findAll(@Query() query: any) {
-    return this.findingsService.findAll(query);
+  findAll(@Req() req: any, @Query() query: any) {
+    const userId = req?.user?.id || req?.user?.userId || '';
+    return this.findingsService.findAll(userId, query);
   }
 
   @Get('stats')
-  getStats() {
-    return this.findingsService.getStats();
+  getStats(@Req() req: any) {
+    const userId = req?.user?.id || req?.user?.userId || '';
+    return this.findingsService.getStats(userId);
   }
 
   @Delete('bulk')
@@ -38,8 +40,9 @@ export class FindingsController {
   }
 
   @Get('scan/:scanId')
-  findByScan(@Param('scanId') scanId: string) {
-    return this.findingsService.findAll({ scanId, limit: 100 });
+  findByScan(@Req() req: any, @Param('scanId') scanId: string) {
+    const userId = req?.user?.id || req?.user?.userId || '';
+    return this.findingsService.findAll(userId, { scanId, limit: 100 });
   }
 
   @Get(':id')

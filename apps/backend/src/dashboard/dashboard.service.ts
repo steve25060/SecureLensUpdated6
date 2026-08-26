@@ -1,38 +1,160 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Request } from 'express';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const DATA_DIR = process.env.NODE_ENV === 'production'
+  ? '/tmp/securelens-data'
+  : join(process.cwd(), '.securelens-data');
 
 @Injectable()
 export class DashboardService {
+  private readonly logger = new Logger(DashboardService.name);
+
   constructor(private prisma: PrismaService) {}
 
-  async getOverview(user: any) {
-    try {
-      const userId = user?.id || user?.userId;
-      
-      // Get user's workspaces or all workspaces if guest
-      const workspaces = await this.prisma.workspace.findMany({
-        where: userId ? { userId } : {},
-        include: { scans: { orderBy: { createdAt: 'desc' }, take: 100 } },
-      });
+  private emptyOverview() {
+    return {
+      securityScores: [
+        { name: 'Overall Security Score', score: 100, label: 'Excellent', color: 'green', change: '+30 pts vs base' },
+        { name: 'Authentication Score', score: 100, label: 'Excellent', color: 'green', change: '0 findings' },
+        { name: 'API Security Score', score: 100, label: 'Excellent', color: 'green', change: '0 findings' },
+        { name: 'Headers Score', score: 100, label: 'Excellent', color: 'green', change: '0 findings' },
+        { name: 'Dependency Score', score: 100, label: 'Excellent', color: 'green', change: '0 findings' },
+        { name: 'Secrets Score', score: 100, label: 'Excellent', color: 'green', change: '0 findings' },
+      ],
+      riskOverview: { total: 0, critical: { count: 0, pct: 0 }, high: { count: 0, pct: 0 }, medium: { count: 0, pct: 0 }, low: { count: 0, pct: 0 } },
+      findingsOverTime: [6, 5, 4, 3, 2, 1, 0].map(daysAgo => {
+        const d = new Date();
+        d.setDate(d.getDate() - daysAgo);
+        return {
+          date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+        };
+      }),
+      topVulnerabilityTypes: [{ name: 'No Vulnerabilities Detected', count: 0 }],
+      recentScans: [],
+      scanActivity: [],
+    };
+  }
 
-      // Get all scans for workspaces
-      let allScans = workspaces.flatMap(ws => ws.scans);
-      if (allScans.length === 0) {
-        allScans = await this.prisma.scan.findMany({
+  async getOverview(user: any) {
+    const userId = user?.id || user?.userId;
+    if (!userId) {
+      return this.emptyOverview();
+    }
+
+    try {
+      if (this.prisma.connected) {
+        // Get user's scans
+        const allScans = await this.prisma.scan.findMany({
+          where: { userId },
           orderBy: { createdAt: 'desc' },
           take: 100,
         });
+        const recentScans = allScans.slice(0, 8);
+
+        // Get user's findings
+        const findings = await this.prisma.finding.findMany({
+          where: {
+            OR: [
+              { scan: { userId } },
+              { workspace: { userId } },
+            ],
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (allScans.length === 0 && findings.length === 0) {
+          return this.emptyOverview();
+        }
+
+        // Calculate risk overview
+        const critical = findings.filter(f => f.severity === 'CRITICAL').length;
+        const high = findings.filter(f => f.severity === 'HIGH').length;
+        const medium = findings.filter(f => f.severity === 'MEDIUM').length;
+        const low = findings.filter(f => f.severity === 'LOW').length;
+        const total = findings.length;
+
+        const riskOverview = {
+          total,
+          critical: { count: critical, pct: total > 0 ? Math.round((critical / total) * 100) : 0 },
+          high: { count: high, pct: total > 0 ? Math.round((high / total) * 100) : 0 },
+          medium: { count: medium, pct: total > 0 ? Math.round((medium / total) * 100) : 0 },
+          low: { count: low, pct: total > 0 ? Math.round((low / total) * 100) : 0 },
+        };
+
+        const securityScores = this.calculateSecurityScores(findings);
+        const findingsOverTime = this.calculateFindingsOverTime(findings);
+        const topVulnerabilityTypes = this.getTopVulnerabilityTypes(findings);
+
+        const formattedScans = recentScans.map(scan => ({
+          id: scan.id,
+          target: scan.target,
+          type: scan.type as 'WEBSITE' | 'GITHUB' | 'COMBINED',
+          status: scan.status as 'COMPLETED' | 'RUNNING' | 'FAILED' | 'PENDING',
+          score: scan.riskScore || 0,
+          findingsCount: findings.filter(f => f.scanId === scan.id).length,
+          time: this.formatTime(scan.createdAt),
+        }));
+
+        const scanActivity = this.formatScanActivity(allScans.slice(0, 5), findings);
+
+        return {
+          securityScores,
+          riskOverview,
+          findingsOverTime,
+          topVulnerabilityTypes,
+          recentScans: formattedScans,
+          scanActivity,
+        };
       }
+    } catch (error: any) {
+      this.logger.warn(`DB getOverview error (${error?.message}) → file fallback`);
+    }
+
+    // File store fallback
+    try {
+      const scansFile = join(DATA_DIR, 'scans.json');
+      const wsFile = join(DATA_DIR, 'workspaces.json');
+      const findingsFile = join(DATA_DIR, 'findings.json');
+
+      let allScans: any[] = [];
+      const userScanIds = new Set<string>();
+      const userWsIds = new Set<string>();
+
+      if (existsSync(scansFile)) {
+        const parsed = JSON.parse(readFileSync(scansFile, 'utf8'));
+        if (Array.isArray(parsed)) {
+          allScans = parsed.filter((s: any) => s.userId === userId);
+          allScans.forEach((s: any) => userScanIds.add(s.id));
+        }
+      }
+      if (existsSync(wsFile)) {
+        const parsed = JSON.parse(readFileSync(wsFile, 'utf8'));
+        if (Array.isArray(parsed)) {
+          parsed.filter((w: any) => w.userId === userId).forEach((w: any) => userWsIds.add(w.id));
+        }
+      }
+
+      let findings: any[] = [];
+      if (existsSync(findingsFile)) {
+        const parsed = JSON.parse(readFileSync(findingsFile, 'utf8'));
+        if (Array.isArray(parsed)) {
+          findings = parsed.filter((f: any) =>
+            f.userId === userId || userScanIds.has(f.scanId) || userWsIds.has(f.workspaceId)
+          );
+        }
+      }
+
+      if (allScans.length === 0 && findings.length === 0) {
+        return this.emptyOverview();
+      }
+
       const recentScans = allScans.slice(0, 8);
-
-      // Get all findings
-      const findings = await this.prisma.finding.findMany({
-        where: userId ? { scan: { workspace: { userId } } } : {},
-        orderBy: { createdAt: 'desc' },
-      });
-
-      // Calculate risk overview
       const critical = findings.filter(f => f.severity === 'CRITICAL').length;
       const high = findings.filter(f => f.severity === 'HIGH').length;
       const medium = findings.filter(f => f.severity === 'MEDIUM').length;
@@ -47,16 +169,10 @@ export class DashboardService {
         low: { count: low, pct: total > 0 ? Math.round((low / total) * 100) : 0 },
       };
 
-      // Calculate security scores based on findings
       const securityScores = this.calculateSecurityScores(findings);
-
-      // Get findings over time (last 7 days)
       const findingsOverTime = this.calculateFindingsOverTime(findings);
-
-      // Get top vulnerability types
       const topVulnerabilityTypes = this.getTopVulnerabilityTypes(findings);
 
-      // Format recent scans
       const formattedScans = recentScans.map(scan => ({
         id: scan.id,
         target: scan.target,
@@ -64,10 +180,9 @@ export class DashboardService {
         status: scan.status as 'COMPLETED' | 'RUNNING' | 'FAILED' | 'PENDING',
         score: scan.riskScore || 0,
         findingsCount: findings.filter(f => f.scanId === scan.id).length,
-        time: this.formatTime(scan.createdAt),
+        time: this.formatTime(new Date(scan.createdAt || Date.now())),
       }));
 
-      // Get scan activity
       const scanActivity = this.formatScanActivity(allScans.slice(0, 5), findings);
 
       return {
@@ -78,22 +193,8 @@ export class DashboardService {
         recentScans: formattedScans,
         scanActivity,
       };
-    } catch (error: any) {
-      return {
-        securityScores: [
-          { name: 'Overall Security Score', score: 98, label: 'Excellent', color: 'green', change: 'Live' },
-          { name: 'Authentication Score', score: 98, label: 'Excellent', color: 'green', change: 'Live' },
-          { name: 'API Security Score', score: 98, label: 'Excellent', color: 'green', change: 'Live' },
-          { name: 'Headers Score', score: 98, label: 'Excellent', color: 'green', change: 'Live' },
-          { name: 'Dependency Score', score: 98, label: 'Excellent', color: 'green', change: 'Live' },
-          { name: 'Secrets Score', score: 98, label: 'Excellent', color: 'green', change: 'Live' },
-        ],
-        riskOverview: { total: 0, critical: { count: 0, pct: 0 }, high: { count: 0, pct: 0 }, medium: { count: 0, pct: 0 }, low: { count: 0, pct: 0 } },
-        findingsOverTime: [],
-        topVulnerabilityTypes: [{ name: 'No Vulnerabilities Detected', count: 0 }],
-        recentScans: [],
-        scanActivity: [],
-      };
+    } catch {
+      return this.emptyOverview();
     }
   }
 
@@ -129,7 +230,7 @@ export class DashboardService {
   }
 
   private calculateCategoryScore(findings: any[]) {
-    if (findings.length === 0) return 95;
+    if (findings.length === 0) return 100;
     
     let score = 100;
     const criticalCount = findings.filter(f => f.severity === 'CRITICAL').length;

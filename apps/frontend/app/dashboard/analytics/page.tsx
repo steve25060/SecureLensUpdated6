@@ -140,12 +140,6 @@ export default function AnalyticsPage() {
         list.push(s);
       }
     });
-    if (list.length === 0) {
-      return [
-        { id: 'scan-1', target: 'https://uptoskills.com', type: 'WEBSITE', status: 'COMPLETED', score: 84, findingsCount: 6 },
-        { id: 'scan-2', target: 'https://github.com/uptoskills/core', type: 'GITHUB', status: 'COMPLETED', score: 88, findingsCount: 4 },
-      ];
-    }
     return list;
   }, [liveScans, dbScans]);
 
@@ -226,7 +220,7 @@ export default function AnalyticsPage() {
         : 100;
 
       // Calculate score using standard asymptotic risk curve
-      const avgScore = calculateSecurityScore(allFindings);
+      const avgScore = allFindings.length > 0 ? calculateSecurityScore(allFindings) : 100;
 
       return {
         totalFindings,

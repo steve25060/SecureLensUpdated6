@@ -70,7 +70,7 @@ export const EVENT_ACTIVE_SCAN_UPDATED = 'securelens:active-scan-updated';
  * Uses sub-linear diminishing severity deduction with density scaling.
  */
 export function calculateSecurityScore(findings: Array<{ severity?: string }>): number {
-  if (!findings || findings.length === 0) return 98;
+  if (!findings || findings.length === 0) return 100;
 
   let critCount = 0;
   let highCount = 0;

@@ -163,8 +163,8 @@ function CreateWizard({
         targetUrl: form.targetUrl.trim() || (form.type !== 'GITHUB' ? 'https://uptoskills.com' : undefined),
         repoUrl: form.repoUrl.trim() || (form.type !== 'WEBSITE' ? 'https://github.com/acme/repo' : undefined),
         tags: form.tags.length > 0 ? form.tags : ['security-audit'],
-        riskScore: 84,
-        findingsCount: 6,
+        riskScore: 100,
+        findingsCount: 0,
         status: 'active',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -813,7 +813,7 @@ export default function WorkspacesPage() {
       return {
         ...ws,
         riskScore: score,
-        findingsCount: findingsCount ?? 6,
+        findingsCount: findingsCount ?? 0,
       };
     });
   }, [workspaces, liveScans]);
@@ -833,7 +833,7 @@ export default function WorkspacesPage() {
   const scoredWorkspaces = activeWorkspaces.filter(w => typeof w.riskScore === 'number' && !isNaN(w.riskScore));
   const computedAvgScore = scoredWorkspaces.length > 0
     ? Math.round(scoredWorkspaces.reduce((s, w) => s + (w.riskScore ?? 0), 0) / scoredWorkspaces.length)
-    : 84;
+    : 100;
 
   const stats = [
     { label: 'Total Workspaces', value: activeWorkspaces.length, icon: Shield, color: 'text-violet-400', bg: 'bg-violet-500/10' },

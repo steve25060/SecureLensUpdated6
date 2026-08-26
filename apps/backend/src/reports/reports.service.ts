@@ -14,10 +14,11 @@ export class ReportsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(userId: string) {
+    if (!userId) return [];
     if (this.prisma.connected) {
       try {
         const reports = await this.prisma.report.findMany({
-          where: userId ? { userId } : {},
+          where: { userId },
           orderBy: { createdAt: 'desc' },
         });
         return reports;

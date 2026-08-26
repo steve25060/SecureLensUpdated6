@@ -230,12 +230,12 @@ export default function DashboardPage() {
   // Dynamically compute all dashboard statistics exclusively for this user
   const computedData: DashboardOverview = useMemo(() => {
     // 1. Overall & Category Security Scores
-    let overallScore = 98;
+    let overallScore = 100;
     if (allFindings.length > 0) {
       overallScore = calculateSecurityScore(allFindings);
     } else if (liveScans.length > 0) {
       const scores = liveScans.map(s => s.score).filter(s => typeof s === 'number' && s > 0);
-      overallScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 98;
+      overallScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 100;
     } else {
       overallScore = 100;
     }
@@ -253,13 +253,19 @@ export default function DashboardPage() {
       return 'Action Required';
     };
 
+    const authScore = authFindings.length > 0 ? calculateSecurityScore(authFindings) : 100;
+    const apiScore = apiFindings.length > 0 ? calculateSecurityScore(apiFindings) : 100;
+    const headerScore = headerFindings.length > 0 ? calculateSecurityScore(headerFindings) : 100;
+    const depScore = depFindings.length > 0 ? calculateSecurityScore(depFindings) : 100;
+    const secretScore = secretFindings.length > 0 ? calculateSecurityScore(secretFindings) : 100;
+
     const securityScores = [
-      { name: 'Overall Security Score', score: overallScore, label: getScoreLabel(overallScore), color: overallScore >= 75 ? 'green' : 'red', change: `${overallScore >= 75 ? '+' : '-'}${Math.abs(overallScore - 70)} pts vs base` },
-      { name: 'Authentication Score', score: calculateSecurityScore(authFindings), label: getScoreLabel(calculateSecurityScore(authFindings)), color: calculateSecurityScore(authFindings) >= 75 ? 'green' : 'red', change: `${authFindings.length} findings` },
-      { name: 'API Security Score', score: calculateSecurityScore(apiFindings), label: getScoreLabel(calculateSecurityScore(apiFindings)), color: calculateSecurityScore(apiFindings) >= 75 ? 'green' : 'yellow', change: `${apiFindings.length} findings` },
-      { name: 'Headers Score', score: calculateSecurityScore(headerFindings), label: getScoreLabel(calculateSecurityScore(headerFindings)), color: calculateSecurityScore(headerFindings) >= 75 ? 'green' : 'yellow', change: `${headerFindings.length} findings` },
-      { name: 'Dependency Score', score: calculateSecurityScore(depFindings), label: getScoreLabel(calculateSecurityScore(depFindings)), color: calculateSecurityScore(depFindings) >= 75 ? 'green' : 'red', change: `${depFindings.length} findings` },
-      { name: 'Secrets Score', score: calculateSecurityScore(secretFindings), label: getScoreLabel(calculateSecurityScore(secretFindings)), color: calculateSecurityScore(secretFindings) >= 75 ? 'green' : 'red', change: `${secretFindings.length} findings` },
+      { name: 'Overall Security Score', score: overallScore, label: getScoreLabel(overallScore), color: overallScore >= 75 ? 'green' : 'red', change: allFindings.length === 0 ? '+30 pts vs base' : `${overallScore >= 75 ? '+' : '-'}${Math.abs(overallScore - 70)} pts vs base` },
+      { name: 'Authentication Score', score: authScore, label: getScoreLabel(authScore), color: authScore >= 75 ? 'green' : 'red', change: `${authFindings.length} findings` },
+      { name: 'API Security Score', score: apiScore, label: getScoreLabel(apiScore), color: apiScore >= 75 ? 'green' : 'yellow', change: `${apiFindings.length} findings` },
+      { name: 'Headers Score', score: headerScore, label: getScoreLabel(headerScore), color: headerScore >= 75 ? 'green' : 'yellow', change: `${headerFindings.length} findings` },
+      { name: 'Dependency Score', score: depScore, label: getScoreLabel(depScore), color: depScore >= 75 ? 'green' : 'red', change: `${depFindings.length} findings` },
+      { name: 'Secrets Score', score: secretScore, label: getScoreLabel(secretScore), color: secretScore >= 75 ? 'green' : 'red', change: `${secretFindings.length} findings` },
     ];
 
     // 2. Risk Overview

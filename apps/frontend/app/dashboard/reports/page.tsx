@@ -231,7 +231,6 @@ export default function ReportsPage() {
     const set = new Set<string>();
     liveScans.forEach(s => s.target && set.add(s.target));
     allAvailableFindings.forEach(f => f.target && set.add(f.target));
-    if (set.size === 0) set.add('https://uptoskills.com');
     return Array.from<string>(set);
   }, [liveScans, allAvailableFindings]);
 
@@ -463,7 +462,7 @@ export default function ReportsPage() {
 
   // Severity breakdown for analytics charts
   const severityData = useMemo(() => {
-    const findingsList = allAvailableFindings.length > 0 ? allAvailableFindings : resolveFindingsForReport({ target: 'all' }, []);
+    const findingsList = allAvailableFindings;
     const crit = findingsList.filter(f => f.severity === 'CRITICAL').length;
     const high = findingsList.filter(f => f.severity === 'HIGH').length;
     const med = findingsList.filter(f => f.severity === 'MEDIUM').length;

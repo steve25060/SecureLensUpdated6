@@ -57,6 +57,7 @@ export class WorkspacesService {
   // ─── findAll ─────────────────────────────────────────────────────────────────
 
   async findAll(userId: string): Promise<WorkspaceRecord[]> {
+    if (!userId) return [];
     await this.ensureUser(userId);
 
     if (this.prisma.connected) {

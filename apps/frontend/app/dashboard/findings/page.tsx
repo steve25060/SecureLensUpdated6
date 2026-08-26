@@ -1127,9 +1127,13 @@ function FindingsContent() {
           {filtered.length === 0 ? (
             <div className="rounded-2xl bg-white/[0.02] border border-white/[0.05] p-12 text-center">
               <Shield className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <h3 className="text-base font-semibold text-white">No security findings match your filters</h3>
+              <h3 className="text-base font-semibold text-white">
+                {activeFindings.length === 0 ? 'No security findings recorded yet' : 'No security findings match your filters'}
+              </h3>
               <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                Try clearing active search queries or switching between Website and GitHub repository tabs.
+                {activeFindings.length === 0
+                  ? 'Launch an automated scan from the dashboard to inspect your assets and surface live vulnerabilities.'
+                  : 'Try clearing active search queries or switching between Website and GitHub repository tabs.'}
               </p>
             </div>
           ) : (

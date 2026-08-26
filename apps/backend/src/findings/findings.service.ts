@@ -55,7 +55,7 @@ export class FindingsService {
     }
   }
 
-  async findAll(query: { scanId?: string; workspaceId?: string; severity?: string; status?: string; source?: string; search?: string; target?: string; category?: string; page?: number | string; limit?: number | string; [key: string]: any }) {
+  async findAll(userId: string, query: { scanId?: string; workspaceId?: string; severity?: string; status?: string; source?: string; search?: string; target?: string; category?: string; page?: number | string; limit?: number | string; [key: string]: any }) {
     const page = typeof query.page === 'string' ? parseInt(query.page, 10) || 1 : (query.page ?? 1);
     const limit = typeof query.limit === 'string' ? parseInt(query.limit, 10) || 100 : (query.limit ?? 100);
     const { page: _p, limit: _l, ...filters } = query;
@@ -63,8 +63,19 @@ export class FindingsService {
     if (this.prisma.connected) {
       try {
         const where: any = {};
-        if (query.scanId) where.scanId = query.scanId;
-        if (filters.workspaceId) where.workspaceId = filters.workspaceId;
+        if (query.scanId) {
+          where.scanId = query.scanId;
+        } else if (filters.workspaceId) {
+          where.workspaceId = filters.workspaceId;
+        } else if (userId) {
+          where.OR = [
+            { scan: { userId } },
+            { workspace: { userId } },
+          ];
+        } else {
+          return { items: [], total: 0, page: 1, limit, pages: 0 };
+        }
+
         if (filters.severity) where.severity = filters.severity;
         if (filters.status) where.status = filters.status;
         if (filters.source) where.source = { contains: filters.source, mode: 'insensitive' };
@@ -72,7 +83,7 @@ export class FindingsService {
         if (filters.category) where.category = { contains: filters.category, mode: 'insensitive' };
 
         if (filters.search) {
-          where.OR = [
+          const searchClause = [
             { title: { contains: filters.search, mode: 'insensitive' } },
             { target: { contains: filters.search, mode: 'insensitive' } },
             { description: { contains: filters.search, mode: 'insensitive' } },
@@ -80,6 +91,12 @@ export class FindingsService {
             { category: { contains: filters.search, mode: 'insensitive' } },
             { cwe: { contains: filters.search, mode: 'insensitive' } },
           ];
+          if (where.OR) {
+            where.AND = [{ OR: where.OR }, { OR: searchClause }];
+            delete where.OR;
+          } else {
+            where.OR = searchClause;
+          }
         }
 
         const [items, total] = await Promise.all([
@@ -102,10 +119,34 @@ export class FindingsService {
     let fileFindings = this.fileStore();
     if (query.scanId) {
       fileFindings = fileFindings.filter(f => f.scanId === query.scanId);
-    }
-    if (filters.workspaceId) {
+    } else if (filters.workspaceId) {
       fileFindings = fileFindings.filter(f => f.workspaceId === filters.workspaceId);
+    } else if (userId) {
+      const scansFile = join(DATA_DIR, 'scans.json');
+      const wsFile = join(DATA_DIR, 'workspaces.json');
+      const userScanIds = new Set<string>();
+      const userWsIds = new Set<string>();
+      try {
+        if (existsSync(scansFile)) {
+          const scans = JSON.parse(readFileSync(scansFile, 'utf8'));
+          if (Array.isArray(scans)) {
+            scans.filter((s: any) => s.userId === userId).forEach((s: any) => userScanIds.add(s.id));
+          }
+        }
+        if (existsSync(wsFile)) {
+          const wss = JSON.parse(readFileSync(wsFile, 'utf8'));
+          if (Array.isArray(wss)) {
+            wss.filter((w: any) => w.userId === userId).forEach((w: any) => userWsIds.add(w.id));
+          }
+        }
+      } catch {}
+      fileFindings = fileFindings.filter(f =>
+        (f as any).userId === userId || userScanIds.has(f.scanId) || userWsIds.has(f.workspaceId)
+      );
+    } else {
+      fileFindings = [];
     }
+
     if (filters.severity) {
       fileFindings = fileFindings.filter(f => f.severity === filters.severity);
     }
@@ -129,7 +170,7 @@ export class FindingsService {
 
     const total = fileFindings.length;
     const items = fileFindings.slice((page - 1) * limit, page * limit);
-    return { items, total, page, limit, pages: Math.ceil(total / limit) || 1 };
+    return { items, total, page, limit, pages: Math.ceil(total / limit) || (total === 0 ? 0 : 1) };
   }
 
   async findByScanId(scanId: string) {
@@ -243,28 +284,70 @@ export class FindingsService {
     return { success: true };
   }
 
-  async getStats() {
+  async getStats(userId?: string) {
     if (this.prisma.connected) {
       try {
-        const total = await this.prisma.finding.count();
-        if (total > 0) {
-          const critical = await this.prisma.finding.count({ where: { severity: 'CRITICAL' } });
-          const high = await this.prisma.finding.count({ where: { severity: 'HIGH' } });
-          const medium = await this.prisma.finding.count({ where: { severity: 'MEDIUM' } });
-          const low = await this.prisma.finding.count({ where: { severity: 'LOW' } });
-          const info = await this.prisma.finding.count({ where: { severity: 'INFO' } });
-
+        if (!userId) {
           return {
-            total,
-            bySeverity: { critical, high, medium, low, info },
+            total: 0,
+            bySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
             bySource: {},
             byCategory: {},
           };
         }
+        const where: any = {
+          OR: [
+            { scan: { userId } },
+            { workspace: { userId } },
+          ],
+        };
+        const total = await this.prisma.finding.count({ where });
+        const critical = await this.prisma.finding.count({ where: { ...where, severity: 'CRITICAL' } });
+        const high = await this.prisma.finding.count({ where: { ...where, severity: 'HIGH' } });
+        const medium = await this.prisma.finding.count({ where: { ...where, severity: 'MEDIUM' } });
+        const low = await this.prisma.finding.count({ where: { ...where, severity: 'LOW' } });
+        const info = await this.prisma.finding.count({ where: { ...where, severity: 'INFO' } });
+
+        return {
+          total,
+          bySeverity: { critical, high, medium, low, info },
+          bySource: {},
+          byCategory: {},
+        };
       } catch (error) {}
     }
 
-    const store = this.fileStore();
+    if (!userId) {
+      return {
+        total: 0,
+        bySeverity: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+        bySource: {},
+        byCategory: {},
+      };
+    }
+
+    const scansFile = join(DATA_DIR, 'scans.json');
+    const wsFile = join(DATA_DIR, 'workspaces.json');
+    const userScanIds = new Set<string>();
+    const userWsIds = new Set<string>();
+    try {
+      if (existsSync(scansFile)) {
+        const scans = JSON.parse(readFileSync(scansFile, 'utf8'));
+        if (Array.isArray(scans)) {
+          scans.filter((s: any) => s.userId === userId).forEach((s: any) => userScanIds.add(s.id));
+        }
+      }
+      if (existsSync(wsFile)) {
+        const wss = JSON.parse(readFileSync(wsFile, 'utf8'));
+        if (Array.isArray(wss)) {
+          wss.filter((w: any) => w.userId === userId).forEach((w: any) => userWsIds.add(w.id));
+        }
+      }
+    } catch {}
+
+    const store = this.fileStore().filter(f =>
+      (f as any).userId === userId || userScanIds.has(f.scanId) || userWsIds.has(f.workspaceId)
+    );
     const critical = store.filter(f => f.severity === 'CRITICAL').length;
     const high = store.filter(f => f.severity === 'HIGH').length;
     const medium = store.filter(f => f.severity === 'MEDIUM').length;

@@ -79,10 +79,11 @@ export class ScansService {
   // ─── queries ────────────────────────────────────────────────────────────────
 
   async findAll(userId: string) {
+    if (!userId) return [];
     if (this.prisma.connected) {
       try {
         const rows = await this.prisma.scan.findMany({
-          where: userId ? { userId } : {},
+          where: { userId },
           orderBy: { createdAt: 'desc' },
           take: 50,
         });
@@ -97,7 +98,7 @@ export class ScansService {
         this.logger.warn(`DB scan findAll failed (${err.message}) → file fallback`);
       }
     }
-    return this.fileStore().filter(s => !userId || s.userId === userId).map(s => {
+    return this.fileStore().filter(s => s.userId === userId).map(s => {
       let score = s.riskScore;
       if (score === null || score === undefined || score === 0 || ((s.findingsCount || 0) > 0 && score >= 98)) {
         score = this.calculateDynamicScore(s.findingsCount || 0);

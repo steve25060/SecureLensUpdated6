@@ -1,10 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const DATA_DIR = process.env.NODE_ENV === 'production'
+  ? '/tmp/securelens-data'
+  : join(process.cwd(), '.securelens-data');
+
 /**
- * Computes analytics from the user's REAL findings + scans. Falls back to
- * curated seed data only when the DB is offline or empty, so the analytics page
- * is never blank.
+ * Computes analytics from the user's REAL findings + scans.
  */
 @Injectable()
 export class AnalyticsService {
@@ -13,6 +18,10 @@ export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getOverview(userId: string) {
+    if (!userId) {
+      return this.buildFromReal([], []);
+    }
+
     if (this.prisma.connected) {
       try {
         const [scans, findings] = await Promise.all([
@@ -22,7 +31,12 @@ export class AnalyticsService {
             take: 200,
           }),
           this.prisma.finding.findMany({
-            where: { scan: { workspace: { userId } } },
+            where: {
+              OR: [
+                { scan: { userId } },
+                { workspace: { userId } },
+              ],
+            },
             orderBy: { createdAt: 'desc' },
             take: 500,
           }),
@@ -33,7 +47,45 @@ export class AnalyticsService {
         this.logger.warn(`Analytics DB query failed (${err.message}) → fallback`);
       }
     }
-    return this.buildFromReal([], []);
+
+    // File store fallback
+    try {
+      const scansFile = join(DATA_DIR, 'scans.json');
+      const wsFile = join(DATA_DIR, 'workspaces.json');
+      const findingsFile = join(DATA_DIR, 'findings.json');
+
+      let scans: any[] = [];
+      const userScanIds = new Set<string>();
+      const userWsIds = new Set<string>();
+
+      if (existsSync(scansFile)) {
+        const parsed = JSON.parse(readFileSync(scansFile, 'utf8'));
+        if (Array.isArray(parsed)) {
+          scans = parsed.filter((s: any) => s.userId === userId);
+          scans.forEach((s: any) => userScanIds.add(s.id));
+        }
+      }
+      if (existsSync(wsFile)) {
+        const parsed = JSON.parse(readFileSync(wsFile, 'utf8'));
+        if (Array.isArray(parsed)) {
+          parsed.filter((w: any) => w.userId === userId).forEach((w: any) => userWsIds.add(w.id));
+        }
+      }
+
+      let findings: any[] = [];
+      if (existsSync(findingsFile)) {
+        const parsed = JSON.parse(readFileSync(findingsFile, 'utf8'));
+        if (Array.isArray(parsed)) {
+          findings = parsed.filter((f: any) =>
+            f.userId === userId || userScanIds.has(f.scanId) || userWsIds.has(f.workspaceId)
+          );
+        }
+      }
+
+      return this.buildFromReal(scans, findings);
+    } catch {
+      return this.buildFromReal([], []);
+    }
   }
 
   private buildFromReal(scans: any[], findings: any[]) {
@@ -51,7 +103,7 @@ export class AnalyticsService {
     const completedScans = scans.filter(s => s.status === 'COMPLETED');
     const avgRiskScore = completedScans.length
       ? Math.round(completedScans.reduce((s, x) => s + (x.riskScore ?? 0), 0) / completedScans.length)
-      : 0;
+      : 100;
 
     const sourceMap = this.countBy(findings, f => f.source ?? 'Unknown');
     const enginePerformance = Object.entries(sourceMap)

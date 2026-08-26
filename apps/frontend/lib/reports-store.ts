@@ -356,7 +356,7 @@ export function resolveFindingsForReport(
         const normFTarget = normalizeTarget(f.target);
         return normRepTarget === normFTarget || normFTarget.includes(normRepTarget) || normRepTarget.includes(normFTarget);
       }
-      return true; // if all else fails, use any local finding
+      return false;
     });
   }
 
@@ -379,12 +379,5 @@ export function resolveFindingsForReport(
     }));
   }
 
-  // 6. Final safety fallback: Generate realistic target-specific findings
-  const targetLabel = report.target || 'https://uptoskills.com';
-  return SAMPLE_SECURITY_FINDINGS.default.map((f, i) => ({
-    ...f,
-    id: `rep-${report.scanId || 'gen'}-${i + 1}`,
-    target: targetLabel,
-    createdAt: new Date().toISOString().split('T')[0],
-  }));
+  return [];
 }
