@@ -167,19 +167,6 @@ export default function Pricing() {
             </motion.div>
           ))}
         </div>
-
-        {/* CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.8 }}
-          viewport={{ once: true }}
-          className="text-center"
-        >
-          <p className="text-gray-400 mb-4">
-            All plans include 14-day free trial. No credit card required.
-          </p>
-        </motion.div>
       </div>
     </section>
   );

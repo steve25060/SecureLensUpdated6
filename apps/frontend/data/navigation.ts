@@ -21,10 +21,6 @@ export const navigation = [
     href: "#docs",
   },
   {
-    title: "Blog",
-    href: "#blog",
-  },
-  {
     title: "About",
     href: "#about",
   },

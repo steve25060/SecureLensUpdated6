@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Code2, Globe2, ShieldCheck } from "lucide-react";
 import { Github } from "@/components/common/GithubIcon";
@@ -62,51 +61,6 @@ const cardItem = {
 };
 
 export default function Hero() {
-  const [messageIndex, setMessageIndex] = useState(0);
-  const [displayedHeadline, setDisplayedHeadline] = useState(headlineMessages[0].join("\n"));
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    const fullHeadline = headlineMessages[messageIndex].join("\n");
-
-    const timeout = window.setTimeout(
-      () => {
-        if (!isDeleting && displayedHeadline.length < fullHeadline.length) {
-          setDisplayedHeadline(fullHeadline.slice(0, displayedHeadline.length + 1));
-          return;
-        }
-
-        if (!isDeleting && displayedHeadline.length === fullHeadline.length) {
-          setIsDeleting(true);
-          return;
-        }
-
-        if (isDeleting && displayedHeadline.length > 0) {
-          setDisplayedHeadline(displayedHeadline.slice(0, -1));
-          return;
-        }
-
-        setIsDeleting(false);
-        setMessageIndex((current) => (current + 1) % headlineMessages.length);
-      },
-      !isDeleting && displayedHeadline.length === fullHeadline.length
-        ? messageIndex === 0
-        ? 3200
-        : 1600
-        : isDeleting && displayedHeadline.length === 0
-        ? 350
-        : isDeleting
-        ? 22
-        : 42
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [displayedHeadline, isDeleting, messageIndex]);
-
-  const headlineLines = displayedHeadline.split("\n");
-  const cursorLine = Math.min(headlineLines.length - 1, headlineMessages[0].length - 1);
-  const visibleLines = Array.from({ length: headlineMessages[0].length }, (_, index) => headlineLines[index] ?? "");
-
   return (
     <section className="relative overflow-x-hidden">
       <HeroBackground />
@@ -146,28 +100,14 @@ export default function Hero() {
           </motion.div>
 
             <h1 className="min-h-auto text-2xl sm:text-3xl lg:text-5xl font-black leading-tight sm:leading-snug text-white">
-            {visibleLines.map((line, index) => {
-              const isAccentLine = index >= 2;
-              const content = line || "\u00a0";
-
-              return (
-                <span
-                  key={index}
-                  className={
-                    isAccentLine
-                      ? "block bg-linear-to-r from-violet-400 via-purple-400 to-fuchsia-400 bg-clip-text text-transparent"
-                      : "block"
-                  }
-                >
-                  {content}
-                  {index === cursorLine && (
-                    <span className={isAccentLine ? "ml-1 animate-pulse text-fuchsia-300" : "ml-1 animate-pulse text-white"}>
-                      |
-                    </span>
-                  )}
-                </span>
-              );
-            })}
+              <span className="block">Unify Scans.</span>
+              <span className="block">Correlate Findings.</span>
+              <span className="block bg-gradient-to-r from-violet-400 via-purple-400 to-fuchsia-400 bg-clip-text text-transparent">
+                Prioritize Risks.
+              </span>
+              <span className="block bg-gradient-to-r from-violet-400 via-purple-400 to-fuchsia-400 bg-clip-text text-transparent">
+                Remediate Faster.
+              </span>
             </h1>
 
           <motion.p

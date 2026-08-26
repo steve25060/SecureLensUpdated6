@@ -223,20 +223,12 @@ export const DOC_TOPICS: DocTopic[] = [
 export default function Docs() {
   const [selectedTopic, setSelectedTopic] = useState<DocTopic | null>(null);
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const handleCopy = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopiedSnippet(code);
     setTimeout(() => setCopiedSnippet(null), 2000);
   };
-
-  const filteredDocs = DOC_TOPICS.filter(
-    doc =>
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.overview.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
     <section id="docs" className="relative overflow-hidden bg-gradient-to-b from-slate-950 via-[#0a0d1a] to-slate-950 py-24">
@@ -266,25 +258,6 @@ export default function Docs() {
           <p className="text-gray-300 text-lg max-w-2xl mx-auto font-normal">
             Everything you need to master SecureLens, automate security scanning, and remediate vulnerabilities at speed.
           </p>
-
-          {/* Quick Search Bar */}
-          <div className="mt-8 max-w-md mx-auto relative">
-            <input
-              type="text"
-              placeholder="Search guides, templates, API endpoints..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full bg-[#0b1020]/90 border border-white/15 focus:border-violet-400/60 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-400 outline-none backdrop-blur shadow-lg shadow-black/40 transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-3.5 text-gray-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
         </motion.div>
 
         {/* Docs Grid */}
@@ -295,7 +268,7 @@ export default function Docs() {
           viewport={{ once: true }}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12"
         >
-          {filteredDocs.map((doc, index) => (
+          {DOC_TOPICS.map((doc, index) => (
             <motion.div
               key={doc.id}
               initial={{ opacity: 0, scale: 0.95 }}

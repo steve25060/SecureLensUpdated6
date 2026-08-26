@@ -1,7 +1,6 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { CheckCircle, Users, Zap } from 'lucide-react';
 import { ShiningText } from '@/components/common/ShiningText';
 
 export default function About() {
@@ -55,30 +54,6 @@ export default function About() {
                   <div className="text-sm text-gray-400">{stat.label}</div>
                 </motion.div>
               ))}
-            </div>
-
-            {/* Values */}
-            <div className="space-y-4">
-              {[
-                { icon: CheckCircle, text: 'Zero false positives with real-world verification' },
-                { icon: Users, text: 'Built by security experts, for security experts' },
-                { icon: Zap, text: 'Fast, scalable scanning at enterprise scale' },
-              ].map((item, idx) => {
-                const Icon = item.icon;
-                return (
-                  <motion.div
-                    key={idx}
-                    initial={{ opacity: 0, x: -10 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + idx * 0.1 }}
-                    viewport={{ once: true }}
-                    className="flex items-start gap-3"
-                  >
-                    <Icon className="w-6 h-6 text-violet-400 flex-shrink-0 mt-1" />
-                    <span className="text-gray-300">{item.text}</span>
-                  </motion.div>
-                );
-              })}
             </div>
           </motion.div>
 

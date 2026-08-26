@@ -28,14 +28,6 @@ export default function Footer() {
             <p className="text-sm leading-relaxed text-slate-400 max-w-sm">
               SecureLens orchestrates industry-leading open-source security engines, correlates findings into actionable intelligence, and remediates threats with AI.
             </p>
-
-            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 text-xs font-medium">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span>All Security Engines Operational</span>
-            </div>
           </div>
 
           {/* Nav Columns */}
@@ -55,7 +47,6 @@ export default function Footer() {
               <h3 className="text-xs font-bold text-white tracking-wider uppercase">Company</h3>
               <ul className="mt-4 space-y-2.5 text-sm">
                 <li><a href="#about" className="hover:text-violet-400 transition-colors">About Us</a></li>
-                <li><a href="#blog" className="hover:text-violet-400 transition-colors">Security Blog</a></li>
                 <li><a href="#" className="hover:text-violet-400 transition-colors">Careers</a></li>
                 <li><a href="#" className="hover:text-violet-400 transition-colors">Press Kit</a></li>
               </ul>
