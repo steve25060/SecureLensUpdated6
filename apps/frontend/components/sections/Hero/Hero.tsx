@@ -109,16 +109,16 @@ export default function Hero() {
   const visibleLines = Array.from({ length: headlineMessages[0].length }, (_, index) => headlineLines[index] ?? "");
 
   return (
-    <section className="relative overflow-x-hidden">
+    <section className="relative overflow-x-hidden w-full">
       <HeroBackground />
 
-      {/* Updated hero container for wider layout, balanced columns, and centered content */}
-      <div className="relative z-10 mx-auto grid min-h-screen max-w-[1600px] items-center gap-4 sm:gap-6 px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:grid-cols-[40%_60%] lg:py-16">
+      {/* Hero container responsive for mobile, tablet, and desktop */}
+      <div className="relative z-10 mx-auto grid min-h-[calc(100dvh-5rem)] max-w-[1600px] grid-cols-1 items-center gap-8 px-4 sm:px-6 lg:grid-cols-[42%_58%] lg:px-8 py-8 sm:py-12 lg:py-16">
         <motion.div
-          initial={{ opacity: 0, x: -40, filter: "blur(8px)" }}
-          animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          className="w-full"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="w-full min-w-0"
         >
           <div className="mb-3 sm:mb-4 flex items-center gap-2">
             <ShiningText className="text-3xl sm:text-4xl lg:text-6xl font-black leading-tight">

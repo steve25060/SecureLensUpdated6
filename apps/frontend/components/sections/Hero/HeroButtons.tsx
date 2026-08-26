@@ -26,8 +26,7 @@ export default function HeroButtons() {
       <motion.div
         variants={container}
         initial="hidden"
-        whileInView="show"
-        viewport={{ once: true, amount: 0.2 }}
+        animate="show"
         className="mt-7 flex flex-wrap gap-3"
       >
         <motion.div variants={item}>
