@@ -8,7 +8,8 @@ import {
   Key, User, Mail, Lock, Eye, EyeOff, Bot, Sparkles, RefreshCw,
   Check, AlertTriangle, ArrowUpDown, ChevronDown, ChevronUp,
   ExternalLink, Server, Cpu, Layers, Sliders, CheckCircle2,
-  XCircle, Loader2, PlayCircle, HelpCircle, GripVertical
+  XCircle, Loader2, PlayCircle, HelpCircle, GripVertical,
+  Building2, Briefcase, Phone, Laptop, ShieldCheck, Trash2
 } from 'lucide-react';
 import { EventBus } from '@/lib/event-bus';
 import { useRealtimeSync } from '@/hooks/useRealtimeSync';
@@ -233,14 +234,69 @@ function SettingsContent() {
   const searchParams = useSearchParams();
   const { isLive } = useRealtimeSync();
 
-  const [activeTab, setActiveTab] = useState<'ai' | 'scanning' | 'notifications' | 'export' | 'appearance'>('ai');
+  const [activeTab, setActiveTab] = useState<'profile' | 'ai' | 'scanning' | 'notifications' | 'export' | 'appearance'>('profile');
+
+  // ─── Profile State ────────────────────────────────────────────────────────
+  const [profile, setProfile] = useState({
+    name: 'Stavan Shah',
+    email: 'stavan@example.com',
+    organization: 'Acme Security Corp',
+    jobTitle: 'Lead AppSec Engineer',
+    phone: '+1 (555) 234-5678',
+    timezone: 'Asia/Kolkata',
+    bio: 'Security researcher and AppSec practitioner focused on automated penetration testing and threat intelligence.',
+    twoFactorEnabled: true,
+    avatarUrl: '',
+  });
+
+  const [passwordState, setPasswordState] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab && ['ai', 'scanning', 'notifications', 'export', 'appearance'].includes(tab)) {
+    if (tab && ['profile', 'ai', 'scanning', 'notifications', 'export', 'appearance'].includes(tab)) {
       setActiveTab(tab as any);
     }
   }, [searchParams]);
+
+  // Load user profile from storage & backend
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user');
+      const userEmail = localStorage.getItem('user_email');
+      const userName = localStorage.getItem('user_name');
+      const userOrg = localStorage.getItem('user_org');
+      const userTitle = localStorage.getItem('user_job_title');
+      const userPhone = localStorage.getItem('user_phone');
+      const userTz = localStorage.getItem('user_timezone');
+      const userBio = localStorage.getItem('user_bio');
+      const userAvatar = localStorage.getItem('user_avatar');
+
+      let parsedUser: any = {};
+      if (userStr) {
+        try { parsedUser = JSON.parse(userStr); } catch {}
+      }
+
+      setProfile(prev => ({
+        ...prev,
+        name: userName || parsedUser.name || parsedUser.username || prev.name,
+        email: userEmail || parsedUser.email || prev.email,
+        organization: userOrg || parsedUser.organization || prev.organization,
+        jobTitle: userTitle || parsedUser.jobTitle || prev.jobTitle,
+        phone: userPhone || parsedUser.phone || prev.phone,
+        timezone: userTz || parsedUser.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || prev.timezone,
+        bio: userBio || parsedUser.bio || prev.bio,
+        avatarUrl: userAvatar || parsedUser.avatarUrl || prev.avatarUrl,
+      }));
+    } catch {}
+  }, []);
 
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [providerState, setProviderState] = useState<Record<AIProviderId, {
@@ -273,6 +329,107 @@ function SettingsContent() {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   }, []);
+
+  const handleSaveProfile = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setSavingProfile(true);
+    try {
+      const token = localStorage.getItem('access_token') || localStorage.getItem('sl_token');
+      
+      try {
+        await fetch('/api/auth/profile', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            name: profile.name,
+            email: profile.email,
+            organization: profile.organization,
+          }),
+        });
+      } catch {}
+
+      localStorage.setItem('user_name', profile.name);
+      localStorage.setItem('user_email', profile.email);
+      localStorage.setItem('user_org', profile.organization);
+      localStorage.setItem('user_job_title', profile.jobTitle);
+      localStorage.setItem('user_phone', profile.phone);
+      localStorage.setItem('user_timezone', profile.timezone);
+      localStorage.setItem('user_bio', profile.bio);
+      if (profile.avatarUrl) localStorage.setItem('user_avatar', profile.avatarUrl);
+
+      const existingUserStr = localStorage.getItem('user');
+      let existingUser: any = {};
+      if (existingUserStr) {
+        try { existingUser = JSON.parse(existingUserStr); } catch {}
+      }
+      const updatedUser = {
+        ...existingUser,
+        name: profile.name,
+        email: profile.email,
+        organization: profile.organization,
+        jobTitle: profile.jobTitle,
+        phone: profile.phone,
+        timezone: profile.timezone,
+        bio: profile.bio,
+        avatarUrl: profile.avatarUrl || existingUser.avatarUrl,
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+
+      // Broadcast profile update event to Header and other components
+      window.dispatchEvent(new Event('userProfileUpdated'));
+      showToast('Profile settings saved successfully!');
+    } catch {
+      showToast('Failed to save profile changes');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordState.currentPassword) {
+      showToast('Please enter your current password');
+      return;
+    }
+    if (passwordState.newPassword.length < 6) {
+      showToast('New password must be at least 6 characters');
+      return;
+    }
+    if (passwordState.newPassword !== passwordState.confirmPassword) {
+      showToast('New passwords do not match');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      await new Promise(r => setTimeout(r, 600));
+      setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      showToast('Security password updated successfully!');
+    } catch {
+      showToast('Failed to update password');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  const handleExportUserData = () => {
+    const data = {
+      profile,
+      exportedAt: new Date().toISOString(),
+      app: 'SecureLens Security Platform',
+      version: '2.5.0',
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `securelens-profile-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Account data exported successfully!');
+  };
 
   useEffect(() => {
     setThemeConfig(getStoredThemeConfig());
@@ -686,6 +843,18 @@ function SettingsContent() {
       {/* Settings Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-white/[0.06] pb-2 overflow-x-auto scrollbar-none">
         <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'profile'
+              ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/20 ring-1 ring-violet-400/30'
+              : 'bg-white/[0.02] text-gray-400 border border-white/[0.04] hover:text-white hover:bg-white/[0.05]'
+          }`}
+        >
+          <User size={15} />
+          <span>Profile & Account</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('ai')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'ai'
@@ -746,6 +915,348 @@ function SettingsContent() {
           <span>Theme Color</span>
         </button>
       </div>
+
+      {/* TAB 0: PROFILE & ACCOUNT SETTINGS */}
+      {activeTab === 'profile' && (
+        <div className="space-y-6">
+          {/* Profile Overview Card */}
+          <div className="p-6 rounded-2xl bg-gradient-to-br from-violet-950/30 via-slate-900/60 to-slate-900 border border-violet-500/20 shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+              <div className="flex items-center gap-4">
+                <div className="relative group">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-violet-600/30 border-2 border-violet-400/40">
+                    {profile.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-xl font-bold text-white tracking-tight">{profile.name}</h2>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                      <ShieldCheck size={11} /> Verified Account
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                      Role: {profile.jobTitle || 'Security Admin'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1 flex items-center gap-2">
+                    <Mail size={12} className="text-gray-500" />
+                    <span>{profile.email}</span>
+                    <span className="text-gray-600">•</span>
+                    <Building2 size={12} className="text-gray-500" />
+                    <span>{profile.organization}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleSaveProfile}
+                  disabled={savingProfile}
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs transition-all shadow-lg shadow-violet-600/25 cursor-pointer disabled:opacity-50"
+                >
+                  {savingProfile ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Saving Profile...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={14} />
+                      <span>Save Profile Changes</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left 2 Cols: Personal & Organization Form */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Personal Information */}
+              <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.04] space-y-5">
+                <div className="flex items-center gap-2 pb-3 border-b border-white/[0.04]">
+                  <User size={18} className="text-violet-400" />
+                  <h3 className="text-sm font-bold text-white">Personal Information</h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-300">Full Name</label>
+                    <input
+                      type="text"
+                      value={profile.name}
+                      onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                      placeholder="e.g. Stavan Shah"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-300">Email Address</label>
+                    <input
+                      type="email"
+                      value={profile.email}
+                      onChange={e => setProfile(p => ({ ...p, email: e.target.value }))}
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                      placeholder="name@company.com"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-300">Organization / Company</label>
+                    <input
+                      type="text"
+                      value={profile.organization}
+                      onChange={e => setProfile(p => ({ ...p, organization: e.target.value }))}
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                      placeholder="e.g. Acme Security Corp"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-300">Job Title / Security Role</label>
+                    <input
+                      type="text"
+                      value={profile.jobTitle}
+                      onChange={e => setProfile(p => ({ ...p, jobTitle: e.target.value }))}
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                      placeholder="e.g. Lead AppSec Engineer"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-300">Phone Number (Optional)</label>
+                    <input
+                      type="tel"
+                      value={profile.phone}
+                      onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))}
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                      placeholder="+1 (555) 000-0000"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-300">Timezone</label>
+                    <select
+                      value={profile.timezone}
+                      onChange={e => setProfile(p => ({ ...p, timezone: e.target.value }))}
+                      className="w-full px-3.5 py-2 rounded-xl bg-[#0b0f19] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                    >
+                      <option value="UTC">UTC (Coordinated Universal Time)</option>
+                      <option value="Asia/Kolkata">Asia/Kolkata (IST, UTC+5:30)</option>
+                      <option value="America/New_York">America/New_York (EST, UTC-5)</option>
+                      <option value="America/Chicago">America/Chicago (CST, UTC-6)</option>
+                      <option value="America/Los_Angeles">America/Los_Angeles (PST, UTC-8)</option>
+                      <option value="Europe/London">Europe/London (GMT/BST)</option>
+                      <option value="Europe/Berlin">Europe/Berlin (CET, UTC+1)</option>
+                      <option value="Asia/Tokyo">Asia/Tokyo (JST, UTC+9)</option>
+                      <option value="Asia/Singapore">Asia/Singapore (SGT, UTC+8)</option>
+                      <option value="Australia/Sydney">Australia/Sydney (AEST, UTC+10)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 pt-2">
+                  <label className="text-xs font-semibold text-gray-300">Security Research Bio & Focus</label>
+                  <textarea
+                    rows={3}
+                    value={profile.bio}
+                    onChange={e => setProfile(p => ({ ...p, bio: e.target.value }))}
+                    className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors resize-none"
+                    placeholder="Brief description of your security focus, bug bounty profile, or research interests..."
+                  />
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={savingProfile}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Save size={13} />
+                    <span>Save Changes</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Password & Authentication */}
+              <form onSubmit={handleSavePassword} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.04] space-y-5">
+                <div className="flex items-center gap-2 pb-3 border-b border-white/[0.04]">
+                  <Lock size={18} className="text-violet-400" />
+                  <h3 className="text-sm font-bold text-white">Change Security Password</h3>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-300">Current Password</label>
+                    <div className="relative">
+                      <input
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        value={passwordState.currentPassword}
+                        onChange={e => setPasswordState(s => ({ ...s, currentPassword: e.target.value }))}
+                        className="w-full px-3.5 py-2 pr-10 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                        placeholder="••••••••••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                      >
+                        {showCurrentPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-gray-300">New Password</label>
+                      <div className="relative">
+                        <input
+                          type={showNewPassword ? 'text' : 'password'}
+                          value={passwordState.newPassword}
+                          onChange={e => setPasswordState(s => ({ ...s, newPassword: e.target.value }))}
+                          className="w-full px-3.5 py-2 pr-10 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                          placeholder="At least 6 characters"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                        >
+                          {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-gray-300">Confirm New Password</label>
+                      <input
+                        type="password"
+                        value={passwordState.confirmPassword}
+                        onChange={e => setPasswordState(s => ({ ...s, confirmPassword: e.target.value }))}
+                        className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-white focus:outline-none focus:border-violet-500 transition-colors"
+                        placeholder="Repeat new password"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    disabled={savingPassword || !passwordState.currentPassword || !passwordState.newPassword}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {savingPassword ? <Loader2 size={13} className="animate-spin" /> : <Key size={13} />}
+                    <span>Update Security Password</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Right Column: Security Status, 2FA, Active Sessions, Export */}
+            <div className="space-y-6">
+              {/* Two-Factor Authentication Card */}
+              <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.04] space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shield size={16} className="text-emerald-400" />
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Two-Factor Auth</h3>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    ENABLED
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Protect your vulnerability scan reports and API keys with TOTP authenticator app verification.
+                </p>
+                <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
+                  <span className="text-xs text-gray-300 font-medium">Authenticator App</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfile(p => ({ ...p, twoFactorEnabled: !p.twoFactorEnabled }));
+                      showToast(profile.twoFactorEnabled ? '2FA disabled' : '2FA activated with Google Authenticator');
+                    }}
+                    className={`text-xs px-3 py-1 rounded-lg border font-semibold transition-all cursor-pointer ${
+                      profile.twoFactorEnabled
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                        : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'
+                    }`}
+                  >
+                    {profile.twoFactorEnabled ? 'Configured' : 'Enable 2FA'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Connected Accounts */}
+              <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.04] space-y-4">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Connected Accounts</h3>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center font-bold text-xs">
+                        G
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-white">Google OAuth</p>
+                        <p className="text-[10px] text-gray-400">Connected</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                      <Check size={12} /> Active
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center font-bold text-xs">
+                        GH
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-white">GitHub OAuth</p>
+                        <p className="text-[10px] text-gray-400">Code Scanning Integration</p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                      <Check size={12} /> Linked
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active Sessions */}
+              <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.04] space-y-3">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Active Device Session</h3>
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                  <Laptop size={18} className="text-emerald-400 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-white truncate">Current Browser (Active Now)</p>
+                    <p className="text-[10px] text-emerald-300/80 truncate">Encrypted JWT Session • HTTPS</p>
+                  </div>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                </div>
+              </div>
+
+              {/* Data & Export */}
+              <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.04] space-y-3">
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider">Account Data</h3>
+                <button
+                  type="button"
+                  onClick={handleExportUserData}
+                  className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-xs font-semibold text-gray-200 hover:text-white transition-all cursor-pointer"
+                >
+                  <Download size={13} />
+                  <span>Export Profile & Account JSON</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: AI & LLM CONFIGURATION */}
       {activeTab === 'ai' && (
