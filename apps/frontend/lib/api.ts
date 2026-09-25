@@ -13,7 +13,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // Always use Next.js rewrite proxy for API calls
 // This ensures all requests go through the configured rewrites in next.config.js
-const BASE_URL = '/api';
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 console.log('[API Client] Configured with BASE_URL:', BASE_URL);
 console.log('[API Client] NODE_ENV:', process.env.NODE_ENV);

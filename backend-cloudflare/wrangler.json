@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "securelens-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "securelens-db",
+      "database_id": "c0c4c30c-a197-4fe8-bec1-ae6cd996a7cf",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
