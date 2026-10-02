@@ -20,11 +20,22 @@ if printf '%s' "$MIGRATE_OUTPUT" | grep -q 'P3005'; then
   echo "[db] Synchronizing the current schema without destructive flags..."
   pnpm exec prisma db push
 
+  # The old Railway deployment used prisma db push directly, so the database
+  # can already match the current schema while lacking _prisma_migrations.
+  # Mark schema/history migrations as applied, but deliberately leave the
+  # final cleanup migration pending so its data cleanup actually executes.
+  CLEANUP_MIGRATION="20261002084500_remove_legacy_test_user"
   for migration_path in prisma/migrations/*; do
     [ -d "$migration_path" ] || continue
     migration_name="$(basename "$migration_path")"
+    if [ "$migration_name" = "$CLEANUP_MIGRATION" ]; then
+      continue
+    fi
     pnpm exec prisma migrate resolve --applied "$migration_name"
   done
+
+  echo "[db] Running pending post-baseline migrations..."
+  pnpm exec prisma migrate deploy
 
   echo "[db] Existing database baselined successfully."
   exit 0
