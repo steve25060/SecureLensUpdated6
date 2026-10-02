@@ -175,7 +175,7 @@ const DEFAULT_PROVIDERS: Record<AIProviderId, Omit<ProviderSetting, 'apiKey' | '
     free: false,
     keyUrl: 'https://platform.deepseek.com/api_keys',
     model: 'deepseek-flash',
-    baseUrl: 'https://api.deepseek.com/v1',
+    baseUrl: 'https://api.deepseek.com',
     models: [
       { id: 'deepseek-flash', label: 'DeepSeek V4.1 Flash', tag: 'Default' },
       { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', tag: 'Pro' },
@@ -188,7 +188,7 @@ const DEFAULT_SETTINGS: UserSettings = {
     primaryProvider: 'gemini',
     autoConnect: true,
     enableFailover: true,
-    failoverOrder: ['gemini', 'openrouter', 'groq', 'openai', 'claude', 'ollama', 'deepseek'],
+    failoverOrder: ['gemini', 'openrouter', 'groq', 'openai', 'claude', 'deepseek', 'ollama'],
     fallbackToRuleEngine: true,
     temperature: 0.2,
     maxTokens: 4096,
@@ -200,7 +200,7 @@ const DEFAULT_SETTINGS: UserSettings = {
     openai: { apiKey: '', model: 'gpt-4o-mini', enabled: true },
     claude: { apiKey: '', model: 'claude-3-5-sonnet-20241022', enabled: true },
     ollama: { apiKey: 'http://localhost:11434', model: 'llama3.3', baseUrl: 'http://localhost:11434', enabled: true },
-    deepseek: { apiKey: '', model: 'deepseek-flash', baseUrl: 'https://api.deepseek.com/v1', enabled: true },
+    deepseek: { apiKey: '', model: 'deepseek-flash', baseUrl: 'https://api.deepseek.com', enabled: true },
   },
   enableNotifications: true,
   notifyOnScanComplete: true,
@@ -327,7 +327,7 @@ function SettingsContent() {
     openai: { apiKey: '', model: 'gpt-4o-mini', enabled: true, status: 'idle' },
     claude: { apiKey: '', model: 'claude-3-5-sonnet-20241022', enabled: true, status: 'idle' },
     ollama: { apiKey: 'http://localhost:11434', model: 'llama3.3', baseUrl: 'http://localhost:11434', enabled: true, status: 'idle' },
-    deepseek: { apiKey: '', model: 'deepseek-flash', baseUrl: 'https://api.deepseek.com/v1', enabled: true, status: 'idle' },
+    deepseek: { apiKey: '', model: 'deepseek-flash', baseUrl: 'https://api.deepseek.com', enabled: true, status: 'idle' },
   });
 
   const [saved, setSaved] = useState(false);
@@ -665,7 +665,7 @@ function SettingsContent() {
     setAutoConnectResult('Scanning and testing available AI keys...');
 
     const candidateProviders = (Object.keys(DEFAULT_PROVIDERS) as AIProviderId[]).filter(p => {
-      if (p === 'ollama') return true;
+      if (p === 'ollama') return process.env.NODE_ENV !== 'production';
       return !!providerState[p].apiKey;
     });
 
