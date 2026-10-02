@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -36,6 +36,45 @@ export class FindingsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private ownerWhere(userId: string) {
+    return {
+      OR: [
+        { scan: { userId } },
+        { workspace: { userId } },
+      ],
+    };
+  }
+
+  private filterFileForUser(items: FindingRecord[], userId: string): FindingRecord[] {
+    if (!userId) return [];
+    const scansFile = join(DATA_DIR, 'scans.json');
+    const wsFile = join(DATA_DIR, 'workspaces.json');
+    const userScanIds = new Set<string>();
+    const userWsIds = new Set<string>();
+    try {
+      if (existsSync(scansFile)) {
+        const scans = JSON.parse(readFileSync(scansFile, 'utf8'));
+        if (Array.isArray(scans)) {
+          scans.filter((scan: any) => scan.userId === userId).forEach((scan: any) => userScanIds.add(scan.id));
+        }
+      }
+      if (existsSync(wsFile)) {
+        const workspaces = JSON.parse(readFileSync(wsFile, 'utf8'));
+        if (Array.isArray(workspaces)) {
+          workspaces
+            .filter((workspace: any) => workspace.userId === userId)
+            .forEach((workspace: any) => userWsIds.add(workspace.id));
+        }
+      }
+    } catch {}
+
+    return items.filter((finding: any) =>
+      finding.userId === userId ||
+      userScanIds.has(finding.scanId) ||
+      userWsIds.has(finding.workspaceId),
+    );
+  }
+
   private fileStore(): FindingRecord[] {
     try {
       if (!existsSync(FINDINGS_FILE)) return [];
@@ -60,21 +99,15 @@ export class FindingsService {
     const limit = typeof query.limit === 'string' ? parseInt(query.limit, 10) || 100 : (query.limit ?? 100);
     const { page: _p, limit: _l, ...filters } = query;
 
+    if (!userId) {
+      return { items: [], total: 0, page: 1, limit, pages: 0 };
+    }
+
     if (this.prisma.connected) {
       try {
-        const where: any = {};
-        if (query.scanId) {
-          where.scanId = query.scanId;
-        } else if (filters.workspaceId) {
-          where.workspaceId = filters.workspaceId;
-        } else if (userId) {
-          where.OR = [
-            { scan: { userId } },
-            { workspace: { userId } },
-          ];
-        } else {
-          return { items: [], total: 0, page: 1, limit, pages: 0 };
-        }
+        const where: any = { AND: [this.ownerWhere(userId)] };
+        if (query.scanId) where.scanId = query.scanId;
+        if (filters.workspaceId) where.workspaceId = filters.workspaceId;
 
         if (filters.severity) where.severity = filters.severity;
         if (filters.status) where.status = filters.status;
@@ -91,12 +124,7 @@ export class FindingsService {
             { category: { contains: filters.search, mode: 'insensitive' } },
             { cwe: { contains: filters.search, mode: 'insensitive' } },
           ];
-          if (where.OR) {
-            where.AND = [{ OR: where.OR }, { OR: searchClause }];
-            delete where.OR;
-          } else {
-            where.OR = searchClause;
-          }
+          where.AND.push({ OR: searchClause });
         }
 
         const [items, total] = await Promise.all([
@@ -115,36 +143,13 @@ export class FindingsService {
       }
     }
 
-    // File store fallback
-    let fileFindings = this.fileStore();
+    // File store fallback (development only): owner-filter first, then query-filter.
+    let fileFindings = this.filterFileForUser(this.fileStore(), userId);
     if (query.scanId) {
       fileFindings = fileFindings.filter(f => f.scanId === query.scanId);
-    } else if (filters.workspaceId) {
+    }
+    if (filters.workspaceId) {
       fileFindings = fileFindings.filter(f => f.workspaceId === filters.workspaceId);
-    } else if (userId) {
-      const scansFile = join(DATA_DIR, 'scans.json');
-      const wsFile = join(DATA_DIR, 'workspaces.json');
-      const userScanIds = new Set<string>();
-      const userWsIds = new Set<string>();
-      try {
-        if (existsSync(scansFile)) {
-          const scans = JSON.parse(readFileSync(scansFile, 'utf8'));
-          if (Array.isArray(scans)) {
-            scans.filter((s: any) => s.userId === userId).forEach((s: any) => userScanIds.add(s.id));
-          }
-        }
-        if (existsSync(wsFile)) {
-          const wss = JSON.parse(readFileSync(wsFile, 'utf8'));
-          if (Array.isArray(wss)) {
-            wss.filter((w: any) => w.userId === userId).forEach((w: any) => userWsIds.add(w.id));
-          }
-        }
-      } catch {}
-      fileFindings = fileFindings.filter(f =>
-        (f as any).userId === userId || userScanIds.has(f.scanId) || userWsIds.has(f.workspaceId)
-      );
-    } else {
-      fileFindings = [];
     }
 
     if (filters.severity) {
@@ -173,34 +178,37 @@ export class FindingsService {
     return { items, total, page, limit, pages: Math.ceil(total / limit) || (total === 0 ? 0 : 1) };
   }
 
-  async findByScanId(scanId: string) {
+  async findByScanId(scanId: string, userId: string) {
     if (this.prisma.connected) {
       try {
         const rows = await this.prisma.finding.findMany({
-          where: { scanId },
+          where: { scanId, ...this.ownerWhere(userId) },
           orderBy: { severity: 'desc' },
         });
         if (rows.length > 0) return rows;
       } catch {}
     }
-    return this.fileStore().filter(f => f.scanId === scanId);
+    return this.filterFileForUser(this.fileStore(), userId).filter(f => f.scanId === scanId);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId: string) {
     if (this.prisma.connected) {
       try {
-        const finding = await this.prisma.finding.findUnique({ where: { id } });
+        const finding = await this.prisma.finding.findFirst({
+          where: { id, ...this.ownerWhere(userId) },
+        });
         if (finding) return finding;
       } catch (error) {
         this.logger.error(`Failed to fetch finding ${id}:`, error);
       }
     }
-    const finding = this.fileStore().find(f => f.id === id);
-    if (!finding) throw new Error(`Finding not found: ${id}`);
+    const finding = this.filterFileForUser(this.fileStore(), userId).find(f => f.id === id);
+    if (!finding) throw new NotFoundException(`Finding not found: ${id}`);
     return finding;
   }
 
-  async updateStatus(id: string, status: string) {
+  async updateStatus(id: string, status: string, userId: string) {
+    await this.findOne(id, userId);
     if (this.prisma.connected) {
       try {
         const finding = await this.prisma.finding.update({
@@ -211,7 +219,7 @@ export class FindingsService {
       } catch (error) {}
     }
     const store = this.fileStore();
-    const item = store.find(f => f.id === id);
+    const item = this.filterFileForUser(store, userId).find(f => f.id === id);
     if (item) {
       item.status = status as any;
       item.updatedAt = new Date().toISOString();
@@ -221,66 +229,111 @@ export class FindingsService {
     return { id, status };
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId: string) {
+    await this.findOne(id, userId);
     if (this.prisma.connected) {
       try {
         await this.prisma.finding.delete({ where: { id } });
       } catch (error) {}
     }
     const store = this.fileStore();
-    const filtered = store.filter(f => f.id !== id);
+    const filtered = store.filter(f => !(f.id === id && this.filterFileForUser([f], userId).length > 0));
     if (filtered.length !== store.length) {
       this.writeFile(filtered);
     }
     return { success: true, id };
   }
 
-  async removeBulk(ids: string[]) {
+  async removeBulk(ids: string[], userId: string) {
+    const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+    if (uniqueIds.length === 0) return { success: true, count: 0 };
+
+    let deletedCount = 0;
     if (this.prisma.connected) {
       try {
-        await this.prisma.finding.deleteMany({ where: { id: { in: ids } } });
-      } catch (error) {}
+        const result = await this.prisma.finding.deleteMany({
+          where: { id: { in: uniqueIds }, ...this.ownerWhere(userId) },
+        });
+        deletedCount = result.count;
+      } catch (error: any) {
+        this.logger.warn(`DB finding bulk delete failed (${error?.message ?? error})`);
+        throw error;
+      }
     }
+
     const store = this.fileStore();
-    const idSet = new Set(ids);
-    const filtered = store.filter(f => !idSet.has(f.id));
-    this.writeFile(filtered);
-    return { success: true, count: ids.length };
+    const ownedIds = new Set(
+      this.filterFileForUser(store, userId)
+        .filter(f => uniqueIds.includes(f.id))
+        .map(f => f.id),
+    );
+    const filtered = store.filter(f => !ownedIds.has(f.id));
+    if (filtered.length !== store.length) this.writeFile(filtered);
+    return { success: true, count: this.prisma.connected ? deletedCount : ownedIds.size };
   }
 
-  async removeByTarget(target: string) {
+  async removeByTarget(target: string, userId: string) {
     if (this.prisma.connected) {
       try {
         await this.prisma.finding.deleteMany({
-          where: { target: { contains: target, mode: 'insensitive' } },
+          where: {
+            target: { contains: target, mode: 'insensitive' },
+            ...this.ownerWhere(userId),
+          },
         });
-      } catch (error) {}
+      } catch (error: any) {
+        this.logger.warn(`DB finding target delete failed (${error?.message ?? error})`);
+        throw error;
+      }
     }
     const store = this.fileStore();
-    const filtered = store.filter(f => !f.target.toLowerCase().includes(target.toLowerCase()));
-    this.writeFile(filtered);
+    const ownedIds = new Set(
+      this.filterFileForUser(store, userId)
+        .filter(f => f.target.toLowerCase().includes(target.toLowerCase()))
+        .map(f => f.id),
+    );
+    const filtered = store.filter(f => !ownedIds.has(f.id));
+    if (filtered.length !== store.length) this.writeFile(filtered);
     return { success: true, target };
   }
 
-  async removeByScan(scanId: string) {
+  async removeByScan(scanId: string, userId: string) {
     if (this.prisma.connected) {
       try {
-        await this.prisma.finding.deleteMany({ where: { scanId } });
-      } catch (error) {}
+        await this.prisma.finding.deleteMany({
+          where: { scanId, ...this.ownerWhere(userId) },
+        });
+      } catch (error: any) {
+        this.logger.warn(`DB finding scan delete failed (${error?.message ?? error})`);
+        throw error;
+      }
     }
     const store = this.fileStore();
-    const filtered = store.filter(f => f.scanId !== scanId);
-    this.writeFile(filtered);
+    const ownedIds = new Set(
+      this.filterFileForUser(store, userId)
+        .filter(f => f.scanId === scanId)
+        .map(f => f.id),
+    );
+    const filtered = store.filter(f => !ownedIds.has(f.id));
+    if (filtered.length !== store.length) this.writeFile(filtered);
     return { success: true, scanId };
   }
 
-  async removeAll() {
+  async removeAll(userId: string) {
     if (this.prisma.connected) {
       try {
-        await this.prisma.finding.deleteMany({});
-      } catch (error) {}
+        await this.prisma.finding.deleteMany({
+          where: this.ownerWhere(userId),
+        });
+      } catch (error: any) {
+        this.logger.warn(`DB finding delete-all failed (${error?.message ?? error})`);
+        throw error;
+      }
     }
-    this.writeFile([]);
+    const store = this.fileStore();
+    const ownedIds = new Set(this.filterFileForUser(store, userId).map(f => f.id));
+    const filtered = store.filter(f => !ownedIds.has(f.id));
+    if (filtered.length !== store.length) this.writeFile(filtered);
     return { success: true };
   }
 
@@ -326,28 +379,7 @@ export class FindingsService {
       };
     }
 
-    const scansFile = join(DATA_DIR, 'scans.json');
-    const wsFile = join(DATA_DIR, 'workspaces.json');
-    const userScanIds = new Set<string>();
-    const userWsIds = new Set<string>();
-    try {
-      if (existsSync(scansFile)) {
-        const scans = JSON.parse(readFileSync(scansFile, 'utf8'));
-        if (Array.isArray(scans)) {
-          scans.filter((s: any) => s.userId === userId).forEach((s: any) => userScanIds.add(s.id));
-        }
-      }
-      if (existsSync(wsFile)) {
-        const wss = JSON.parse(readFileSync(wsFile, 'utf8'));
-        if (Array.isArray(wss)) {
-          wss.filter((w: any) => w.userId === userId).forEach((w: any) => userWsIds.add(w.id));
-        }
-      }
-    } catch {}
-
-    const store = this.fileStore().filter(f =>
-      (f as any).userId === userId || userScanIds.has(f.scanId) || userWsIds.has(f.workspaceId)
-    );
+    const store = this.filterFileForUser(this.fileStore(), userId);
     const critical = store.filter(f => f.severity === 'CRITICAL').length;
     const high = store.filter(f => f.severity === 'HIGH').length;
     const medium = store.filter(f => f.severity === 'MEDIUM').length;
