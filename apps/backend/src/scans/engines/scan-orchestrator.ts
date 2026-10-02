@@ -377,7 +377,15 @@ export class ScanOrchestrator {
       const hostOnlyEngines = ['dnsx', 'subfinder', 'nmap', 'testssl'];
       const targetParam = hostOnlyEngines.includes(engineId) ? hostname : targetUrl;
 
-      const cmd = config.cmd.replace(/<TARGET>/g, targetParam);
+      // Scanner commands execute through a shell. Quote the user-controlled
+      // target before substitution and remove any template-level wrapping
+      // quotes so URLs cannot inject additional shell syntax.
+      const shellQuote = (value: string) => `'${value.replace(/'/g, `'"'"'`)}'`;
+      const quotedTarget = shellQuote(targetParam);
+      const cmd = config.cmd
+        .replace(/"<TARGET>"/g, quotedTarget)
+        .replace(/'<TARGET>'/g, quotedTarget)
+        .replace(/<TARGET>/g, quotedTarget);
       this.addLog(logs, 'info', engineId, `Executing: ${cmd.substring(0, 90)}...`);
 
       const { stdout, stderr } = await execAsync(cmd, {
