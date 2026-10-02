@@ -6,7 +6,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ScanExecutor, ExecutionLog } from './engines/scan-executor';
 import { enginesForMode, isValidEngineId, validEngineIdsForMode } from './engines/catalog';
-import { pickFindingsForEngine } from './engines/finding-templates';
 import { Severity } from '@prisma/client';
 
 /**
@@ -158,32 +157,6 @@ export class ScansService {
         });
       } catch (e: any) {
         this.logger.warn(`Failed to fetch DB findings for scan ${scanId}: ${e.message}`);
-      }
-    }
-
-    // Fallback: If DB findings are empty but scan has findingsCount, pick from templates
-    if (findings.length === 0 && scan.findingsCount > 0) {
-      const engines = scan.engines ?? ['nuclei', 'owasp_zap'];
-      for (const eng of engines) {
-        const templates = pickFindingsForEngine(eng, scan.target || 'target');
-        for (const t of templates) {
-          findings.push({
-            id: `f-${randomUUID()}`,
-            title: t.title,
-            severity: t.severity,
-            category: t.category,
-            cwe: t.cwe,
-            cvss: t.cvss,
-            owasp: t.owasp,
-            description: t.description,
-            remediation: t.remediation,
-            target: scan.target,
-            status: 'NEW',
-            source: eng,
-            scanId,
-          });
-        }
-        if (findings.length >= scan.findingsCount) break;
       }
     }
 

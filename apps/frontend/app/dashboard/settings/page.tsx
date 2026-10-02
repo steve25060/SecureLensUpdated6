@@ -119,12 +119,12 @@ const DEFAULT_PROVIDERS: Record<AIProviderId, Omit<ProviderSetting, 'apiKey' | '
     description: 'Ultra low latency LPU hardware acceleration providing near-instantaneous token generation.',
     free: true,
     keyUrl: 'https://console.groq.com/keys',
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-120b',
     models: [
-      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B Versatile (Verified Flagship)', tag: 'Default' },
-      { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant (Verified 138ms Ultra-Fast)', tag: 'Fast' },
-      { id: 'groq/compound', label: 'Groq Compound (Verified Reasoning)', tag: 'Pro' },
-      { id: 'qwen/qwen3.6-27b', label: 'Qwen 3.6 27B (Verified 125ms)', tag: 'Code' },
+      { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (Groq Production)', tag: 'Default' },
+      { id: 'openai/gpt-oss-20b', label: 'GPT-OSS 20B (Groq Production)', tag: 'Fast' },
+      { id: 'qwen/qwen3.8-27b', label: 'Qwen 3.8 27B (Groq Preview)', tag: 'Preview' },
+      
     ],
   },
   openai: {
@@ -174,11 +174,11 @@ const DEFAULT_PROVIDERS: Record<AIProviderId, Omit<ProviderSetting, 'apiKey' | '
     description: 'Cost-effective high-reasoning model for complex security architectures and exploit scenarios.',
     free: false,
     keyUrl: 'https://platform.deepseek.com/api_keys',
-    model: 'deepseek-chat',
-    baseUrl: 'https://api.deepseek.com/v1',
+    model: 'deepseek-flash',
+    baseUrl: 'https://api.deepseek.com',
     models: [
-      { id: 'deepseek-chat', label: 'DeepSeek-V3 Chat', tag: 'Default' },
-      { id: 'deepseek-reasoner', label: 'DeepSeek-R1 Reasoner', tag: 'Reasoning' },
+      { id: 'deepseek-flash', label: 'DeepSeek V4.1 Flash', tag: 'Default' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', tag: 'Pro' },
     ],
   },
 };
@@ -188,7 +188,7 @@ const DEFAULT_SETTINGS: UserSettings = {
     primaryProvider: 'gemini',
     autoConnect: true,
     enableFailover: true,
-    failoverOrder: ['gemini', 'openrouter', 'groq', 'openai', 'claude', 'ollama', 'deepseek'],
+    failoverOrder: ['gemini', 'openrouter', 'groq', 'openai', 'claude', 'deepseek', 'ollama'],
     fallbackToRuleEngine: true,
     temperature: 0.2,
     maxTokens: 4096,
@@ -200,7 +200,7 @@ const DEFAULT_SETTINGS: UserSettings = {
     openai: { apiKey: '', model: 'gpt-4o-mini', enabled: true },
     claude: { apiKey: '', model: 'claude-3-5-sonnet-20241022', enabled: true },
     ollama: { apiKey: 'http://localhost:11434', model: 'llama3.3', baseUrl: 'http://localhost:11434', enabled: true },
-    deepseek: { apiKey: '', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1', enabled: true },
+    deepseek: { apiKey: '', model: 'deepseek-flash', baseUrl: 'https://api.deepseek.com', enabled: true },
   },
   enableNotifications: true,
   notifyOnScanComplete: true,
@@ -228,6 +228,17 @@ const ACCENT_COLORS = [
   { name: 'Rose', value: '#ef4444' },
   { name: 'Cyan', value: '#06b6d4' },
 ];
+
+async function readJsonResponse(response: Response): Promise<any> {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const bodyPreview = (await response.text()).slice(0, 160);
+    throw new Error(
+      `SecureLens API returned ${response.status} ${response.statusText} instead of JSON${bodyPreview ? `: ${bodyPreview}` : ''}`,
+    );
+  }
+  return response.json();
+}
 
 function SettingsContent() {
   const router = useRouter();
@@ -316,7 +327,7 @@ function SettingsContent() {
     openai: { apiKey: '', model: 'gpt-4o-mini', enabled: true, status: 'idle' },
     claude: { apiKey: '', model: 'claude-3-5-sonnet-20241022', enabled: true, status: 'idle' },
     ollama: { apiKey: 'http://localhost:11434', model: 'llama3.3', baseUrl: 'http://localhost:11434', enabled: true, status: 'idle' },
-    deepseek: { apiKey: '', model: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1', enabled: true, status: 'idle' },
+    deepseek: { apiKey: '', model: 'deepseek-flash', baseUrl: 'https://api.deepseek.com', enabled: true, status: 'idle' },
   });
 
   const [saved, setSaved] = useState(false);
@@ -492,7 +503,7 @@ function SettingsContent() {
 
       // 4. Fetch backend AI status to see if server-side keys exist
       fetch('/api/ai-copilot/status')
-        .then(res => res.ok ? res.json() : null)
+        .then(res => res.ok ? readJsonResponse(res) : null)
         .then(statusData => {
           if (statusData?.providers) {
             setProviderState(prev => {
@@ -610,7 +621,7 @@ function SettingsContent() {
         }),
       });
 
-      const data = await res.json();
+      const data = await readJsonResponse(res);
       const latency = Date.now() - startTime;
 
       if (res.ok && data.success) {
@@ -654,7 +665,7 @@ function SettingsContent() {
     setAutoConnectResult('Scanning and testing available AI keys...');
 
     const candidateProviders = (Object.keys(DEFAULT_PROVIDERS) as AIProviderId[]).filter(p => {
-      if (p === 'ollama') return true;
+      if (p === 'ollama') return process.env.NODE_ENV !== 'production';
       return !!providerState[p].apiKey;
     });
 
@@ -679,7 +690,7 @@ function SettingsContent() {
               model: providerState[p].model,
             }),
           });
-          const json = await res.json();
+          const json = await readJsonResponse(res);
           const latency = Date.now() - start;
           if (res.ok && json.success) {
             results.push({ provider: p, latency, success: true });

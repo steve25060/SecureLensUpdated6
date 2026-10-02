@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UnifiedFinding } from '@securelens/findings-schema';
 
-export type AIProvider = 'gemini' | 'groq' | 'openrouter' | 'openai' | 'claude' | 'ollama';
+export type AIProvider = 'gemini' | 'groq' | 'openrouter' | 'openai' | 'claude' | 'deepseek' | 'ollama';
 
 export interface ChatAttachment {
   name?: string;
@@ -39,7 +39,7 @@ export interface ChatRequestOptions {
 
 /**
  * AI Security Copilot Service
- * 
+ *
  * Features:
  * 1. Multi-key registry: Saves individual API keys & models for EACH provider.
  * 2. Automatic Failover: When one provider reaches rate limits (429 / Quota / 503),
@@ -51,14 +51,15 @@ export class AICopilotService {
   private readonly logger = new Logger(AICopilotService.name);
   private primaryProvider: AIProvider = 'gemini';
 
-  private customFailoverOrder: AIProvider[] = ['gemini', 'groq', 'openrouter', 'openai', 'claude', 'ollama'];
+  private customFailoverOrder: AIProvider[] = ['gemini', 'groq', 'openrouter', 'openai', 'claude', 'deepseek', 'ollama'];
 
   private providerRegistry: Record<AIProvider, ProviderConfig> = {
     gemini: { apiKey: '', model: 'gemini-3.5-flash-lite', enabled: true },
-    groq: { apiKey: '', model: 'llama-3.3-70b-versatile', enabled: true },
+    groq: { apiKey: '', model: 'openai/gpt-oss-120b', enabled: true },
     openrouter: { apiKey: '', model: 'nvidia/nemotron-3.5-lightning:free', enabled: true },
     openai: { apiKey: '', model: 'gpt-4o-mini', enabled: true },
     claude: { apiKey: '', model: 'claude-3-5-sonnet-20241022', enabled: true },
+    deepseek: { apiKey: '', model: 'deepseek-flash', enabled: true },
     ollama: { apiKey: 'http://localhost:11434', model: 'llama3.3', enabled: true },
   };
 
@@ -69,6 +70,7 @@ export class AICopilotService {
     const openRouterKey = this.configService.get('OPENROUTER_API_KEY');
     const openAIKey = this.configService.get('OPENAI_API_KEY');
     const claudeKey = this.configService.get('CLAUDE_API_KEY');
+    const deepseekKey = this.configService.get('DEEPSEEK_API_KEY');
     const ollamaUrl = this.configService.get('OLLAMA_BASE_URL');
 
     if (geminiKey) this.providerRegistry.gemini.apiKey = geminiKey;
@@ -76,6 +78,7 @@ export class AICopilotService {
     if (openRouterKey) this.providerRegistry.openrouter.apiKey = openRouterKey;
     if (openAIKey) this.providerRegistry.openai.apiKey = openAIKey;
     if (claudeKey) this.providerRegistry.claude.apiKey = claudeKey;
+    if (deepseekKey) this.providerRegistry.deepseek.apiKey = deepseekKey;
     if (ollamaUrl) this.providerRegistry.ollama.apiKey = ollamaUrl;
 
     // Set default primary provider based on active keys
@@ -89,6 +92,8 @@ export class AICopilotService {
       this.primaryProvider = 'openai';
     } else if (claudeKey) {
       this.primaryProvider = 'claude';
+    } else if (deepseekKey) {
+      this.primaryProvider = 'deepseek';
     }
 
     this.logger.log(`AICopilotService initialized. Primary: ${this.primaryProvider}. Configured keys: ${this.getConfiguredProviders().join(', ') || 'None'}`);
@@ -98,10 +103,9 @@ export class AICopilotService {
    * Get list of providers that have an API key configured
    */
   getConfiguredProviders(): AIProvider[] {
-    return (Object.keys(this.providerRegistry) as AIProvider[]).filter(p => {
-      if (p === 'ollama') return true;
-      return !!this.providerRegistry[p].apiKey;
-    });
+    return (Object.keys(this.providerRegistry) as AIProvider[]).filter(
+      p => !!this.providerRegistry[p].apiKey,
+    );
   }
 
   /**
@@ -167,14 +171,16 @@ export class AICopilotService {
         openrouter: { configured: !!this.providerRegistry.openrouter.apiKey, model: this.providerRegistry.openrouter.model, enabled: this.providerRegistry.openrouter.enabled !== false },
         openai: { configured: !!this.providerRegistry.openai.apiKey, model: this.providerRegistry.openai.model, enabled: this.providerRegistry.openai.enabled !== false },
         claude: { configured: !!this.providerRegistry.claude.apiKey, model: this.providerRegistry.claude.model, enabled: this.providerRegistry.claude.enabled !== false },
+        deepseek: { configured: !!this.providerRegistry.deepseek.apiKey, model: this.providerRegistry.deepseek.model, enabled: this.providerRegistry.deepseek.enabled !== false },
         ollama: { configured: true, model: this.providerRegistry.ollama.model, enabled: this.providerRegistry.ollama.enabled !== false },
       },
       supportedProviders: [
         { id: 'gemini', name: 'Google Gemini (2.5 / 2.0 Flash)', free: true, url: 'https://aistudio.google.com/app/apikey', defaultModel: 'gemini-2.5-flash', configured: !!this.providerRegistry.gemini.apiKey },
-        { id: 'groq', name: 'Groq Cloud (Llama 3.3 70B & DeepSeek R1)', free: true, url: 'https://console.groq.com/keys', defaultModel: 'llama-3.3-70b-versatile', configured: !!this.providerRegistry.groq.apiKey },
+        { id: 'groq', name: 'Groq Cloud (GPT-OSS & Qwen)', free: true, url: 'https://console.groq.com/keys', defaultModel: 'openai/gpt-oss-120b', configured: !!this.providerRegistry.groq.apiKey },
         { id: 'openrouter', name: 'OpenRouter (Free Llama 3.3 / DeepSeek / Gemini)', free: true, url: 'https://openrouter.ai/keys', defaultModel: 'meta-llama/llama-3.3-70b-instruct:free', configured: !!this.providerRegistry.openrouter.apiKey },
         { id: 'openai', name: 'OpenAI (GPT-4o & o3-mini)', free: false, url: 'https://platform.openai.com/api-keys', defaultModel: 'gpt-4o-mini', configured: !!this.providerRegistry.openai.apiKey },
         { id: 'claude', name: 'Anthropic Claude (3.5 Sonnet & Haiku)', free: false, url: 'https://console.anthropic.com/', defaultModel: 'claude-3-5-sonnet-20241022', configured: !!this.providerRegistry.claude.apiKey },
+        { id: 'deepseek', name: 'DeepSeek API (V4.1 Flash / V4 Pro)', free: false, url: 'https://platform.deepseek.com/api_keys', defaultModel: 'deepseek-flash', configured: !!this.providerRegistry.deepseek.apiKey },
         { id: 'ollama', name: 'Local Ollama (Llama 3.3 / Qwen 2.5 / DeepSeek)', free: true, url: 'http://localhost:11434', defaultModel: 'llama3.3', configured: true },
       ],
     };
@@ -201,7 +207,6 @@ export class AICopilotService {
       if (this.providerRegistry[p]?.enabled === false) return false;
       if (customKeys && customKeys[p]?.apiKey) return true;
       if (this.providerRegistry[p]?.apiKey) return true;
-      if (p === 'ollama') return true;
       return false;
     });
   }
@@ -259,6 +264,8 @@ ${options.findingContext ? `Current Finding Context: ${JSON.stringify(options.fi
           reply = await this.callOpenAI(options.messages, apiKey, model, systemPrompt);
         } else if (candidate === 'claude') {
           reply = await this.callClaude(options.messages, apiKey, model, systemPrompt);
+        } else if (candidate === 'deepseek') {
+          reply = await this.callDeepSeek(options.messages, apiKey, model, systemPrompt);
         } else if (candidate === 'ollama') {
           reply = await this.callOllama(options.messages, model, systemPrompt);
         }
@@ -315,8 +322,12 @@ ${options.findingContext ? `Current Finding Context: ${JSON.stringify(options.fi
         res = await this.callOpenAI(testMessages, apiKey, activeModel);
       } else if (provider === 'claude') {
         res = await this.callClaude(testMessages, apiKey, activeModel);
+      } else if (provider === 'deepseek') {
+        res = await this.callDeepSeek(testMessages, apiKey, activeModel);
       } else if (provider === 'ollama') {
         res = await this.callOllama(testMessages, activeModel);
+      } else {
+        throw new Error(`Unsupported AI provider: ${provider}`);
       }
       const latencyMs = Date.now() - start;
       return { success: true, message: `Connected to ${provider} (${activeModel}): "${res.slice(0, 80)}"`, latencyMs };
@@ -506,10 +517,9 @@ Format your answer with:
 
     const modelsToTry = [
       model,
-      'llama-3.3-70b-versatile',
-      'llama-3.1-8b-instant',
-      'qwen/qwen3.6-27b',
-      'groq/compound',
+      'openai/gpt-oss-120b',
+      'openai/gpt-oss-20b',
+      'qwen/qwen3.8-27b',
     ].filter(Boolean);
     const uniqueModels = Array.from(new Set(modelsToTry));
 
@@ -669,6 +679,56 @@ Format your answer with:
   }
 
   /**
+   * DeepSeek API (OpenAI-compatible Chat Completions)
+   */
+  private async callDeepSeek(
+    messages: ChatMessage[],
+    apiKey: string,
+    model: string = 'deepseek-flash',
+    systemPrompt?: string,
+  ): Promise<string> {
+    const url = 'https://api.deepseek.com/chat/completions';
+    const formattedMessages: any[] = [];
+    if (systemPrompt) {
+      formattedMessages.push({ role: 'system', content: systemPrompt });
+    }
+    messages.forEach(m => {
+      if (m.attachment?.isImage && m.attachment?.base64) {
+        formattedMessages.push({
+          role: m.role,
+          content: [
+            { type: 'text', text: m.content },
+            { type: 'image_url', image_url: { url: m.attachment.base64 } },
+          ],
+        });
+      } else {
+        formattedMessages.push({ role: m.role, content: m.content });
+      }
+    });
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: formattedMessages,
+        max_tokens: 1500,
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`DeepSeek API error (${res.status}): ${errText}`);
+    }
+
+    const json = await res.json();
+    return json?.choices?.[0]?.message?.content || 'No response generated by DeepSeek.';
+  }
+
+  /**
    * 5. Anthropic Claude API
    */
   private async callClaude(messages: ChatMessage[], apiKey: string, model: string = 'claude-3-5-sonnet-20241022', systemPrompt?: string): Promise<string> {
@@ -750,10 +810,11 @@ Format your answer with:
   private getDefaultModel(provider: AIProvider): string {
     switch (provider) {
       case 'gemini': return 'gemini-2.5-flash';
-      case 'groq': return 'llama-3.3-70b-versatile';
+      case 'groq': return 'openai/gpt-oss-120b';
       case 'openrouter': return 'meta-llama/llama-3.3-70b-instruct:free';
       case 'openai': return 'gpt-4o-mini';
       case 'claude': return 'claude-3-5-sonnet-20241022';
+      case 'deepseek': return 'deepseek-flash';
       case 'ollama': return 'llama3.3';
       default: return 'gemini-2.5-flash';
     }

@@ -169,9 +169,8 @@ export function saveStoredWorkspace(workspace: Workspace): Workspace {
 
     // Background sync to backend
     const token = localStorage.getItem('access_token') || localStorage.getItem('sl_token');
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-
-    fetch(`${backendUrl}/api/workspaces`, {
+    
+    fetch(`/api/workspaces`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -211,9 +210,8 @@ export function deleteStoredWorkspace(id: string): boolean {
 
     // Background delete on backend
     const token = localStorage.getItem('access_token') || localStorage.getItem('sl_token');
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-
-    fetch(`${backendUrl}/api/workspaces/${id}`, {
+    
+    fetch(`/api/workspaces/${id}`, {
       method: 'DELETE',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }).catch(() => {});

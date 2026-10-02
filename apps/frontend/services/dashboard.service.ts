@@ -1,5 +1,5 @@
 import type { DashboardOverview } from '@/types/dashboard';
-import axios from 'axios';
+import api from '@/lib/api';
 
 /**
  * Returns Authorization header with the stored JWT token, if available.
@@ -18,7 +18,7 @@ function authHeaders(): Record<string, string> {
  */
 export const dashboardService = {
   async getDashboardOverview(): Promise<DashboardOverview> {
-    const response = await axios.get<DashboardOverview>('/api/dashboard/overview', {
+    const response = await api.get<DashboardOverview>('/dashboard/overview', {
       headers: authHeaders(),
     });
     return response.data;

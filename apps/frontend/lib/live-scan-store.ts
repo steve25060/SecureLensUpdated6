@@ -455,9 +455,8 @@ export function saveLiveScanRun(params: {
 
       // 3. Persist to Backend Server / Database in Background
       const token = localStorage.getItem('access_token') || localStorage.getItem('sl_token');
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-
-      fetch(`${backendUrl}/api/scans/create`, {
+      
+      fetch(`/api/scans/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

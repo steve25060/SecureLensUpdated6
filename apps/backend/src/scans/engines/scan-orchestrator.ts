@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { execSync, exec } from 'child_process';
 import { promisify } from 'util';
 import { FindingTemplate, EngineCommandConfig, getEngineCommand, getEngineCommandForProfile, ScanProfile } from './engine-commands-advanced';
-import { pickFindingsForEngine } from './finding-templates';
 import AdvancedResultParser from './advanced-result-parser';
 import { CorrelationEngine } from './correlation-engine';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -356,7 +355,7 @@ export class ScanOrchestrator {
   ): Promise<FindingTemplate[]> {
     try {
       if (!config.cmd) {
-        return pickFindingsForEngine(engineId, target, profile);
+        throw new Error(`Engine ${engineId} has no executable command configured`);
       }
 
       let cleanTarget = target.trim();
@@ -386,7 +385,7 @@ export class ScanOrchestrator {
         maxBuffer: 10 * 1024 * 1024,
         env: {
           ...process.env,
-          PATH: `${process.env.PATH || ''}:/home/stavan/go/bin:/usr/bin:/usr/local/bin:/usr/sbin:/bin`,
+          PATH: `${process.env.PATH || ''}:/usr/local/bin:/usr/bin:/usr/sbin:/bin`,
         },
       });
 
@@ -400,18 +399,14 @@ export class ScanOrchestrator {
       // Apply specific parsers if available
       findings = this.applySpecializedParser(engineId, stdout, target, findings);
 
-      if (!findings || findings.length === 0) {
-        findings = pickFindingsForEngine(engineId, target, profile);
-      }
-
-      return findings;
+      return findings || [];
     } catch (error: any) {
       if (error.killed) {
         this.addLog(logs, 'error', engineId, `Timeout exceeded`);
       } else {
         this.addLog(logs, 'error', engineId, `Execution failed: ${error.message}`);
       }
-      return pickFindingsForEngine(engineId, target, profile);
+      throw error;
     }
   }
 

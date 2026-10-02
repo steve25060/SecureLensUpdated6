@@ -238,8 +238,7 @@ export function saveStoredReport(report: StoredReport): StoredReport {
 
     // Sync to backend in background if token available
     const token = localStorage.getItem('access_token') || localStorage.getItem('sl_token');
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000';
-    fetch(`${backendUrl}/api/reports`, {
+        fetch(`/api/reports`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
