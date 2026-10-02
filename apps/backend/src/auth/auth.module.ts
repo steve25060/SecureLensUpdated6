@@ -8,6 +8,11 @@ import { JwtStrategy } from './jwt.strategy';
 import { GithubStrategy } from './github.strategy';
 import { GoogleStrategy } from './google.strategy';
 
+const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'securelens-dev-secret');
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET is required in production');
+}
+
 @Global()
 @Module({
   // Global so WorkspacesService (and others) can inject AuthService / JwtService
@@ -15,7 +20,7 @@ import { GoogleStrategy } from './google.strategy';
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'default_secret',
+      secret: jwtSecret,
       signOptions: { expiresIn: '1h' },
     }),
   ],
