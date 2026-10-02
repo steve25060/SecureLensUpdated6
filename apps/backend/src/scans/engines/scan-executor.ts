@@ -96,7 +96,7 @@ export class ScanExecutor {
           this.prisma.scan.update({
             where: { id: scanId },
             data: { progress: pct },
-          }).catch(() => void 0);
+          });
         },
       });
 
@@ -115,53 +115,15 @@ export class ScanExecutor {
       let correlatedFindings = orchestrationResult.correlatedFindings || [];
       
       if (this.prisma.connected) {
-        let validWorkspaceId = workspaceId;
-        try {
-          const ws = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
-          if (!ws) {
-            const anyWs = await this.prisma.workspace.findFirst();
-            if (anyWs) {
-              validWorkspaceId = anyWs.id;
-            } else {
-              const user = await this.prisma.user.findFirst();
-              const userId = user?.id || 'demo-user-1';
-              if (!user) {
-                await this.prisma.user.upsert({
-                  where: { id: 'demo-user-1' },
-                  update: {},
-                  create: {
-                    id: 'demo-user-1',
-                    email: 'demo@securelens.io',
-                    name: 'Demo Security Analyst',
-                  },
-                });
-              }
-              const createdWs = await this.prisma.workspace.create({
-                data: {
-                  id: workspaceId || 'default-workspace',
-                  name: 'Primary Security Workspace',
-                  type: 'WEBSITE',
-                  userId,
-                },
-              });
-              validWorkspaceId = createdWs.id;
-            }
-          }
+        const validWorkspaceId = workspaceId;
+        const ws = await this.prisma.workspace.findUnique({ where: { id: workspaceId } });
+        if (!ws) {
+          throw new Error(`Workspace not found for scan: ${workspaceId}`);
+        }
 
-          const existingScan = await this.prisma.scan.findUnique({ where: { id: scanId } });
-          if (!existingScan) {
-            await this.prisma.scan.create({
-              data: {
-                id: scanId,
-                workspaceId: validWorkspaceId,
-                target,
-                status: 'RUNNING',
-                engines: engineIds,
-              },
-            });
-          }
-        } catch (e: any) {
-          this.logger.warn(`Workspace/Scan ensure failed: ${e?.message}`);
+        const existingScan = await this.prisma.scan.findUnique({ where: { id: scanId } });
+        if (!existingScan) {
+          throw new Error(`Scan record not found before execution: ${scanId}`);
         }
 
         for (const correlated of correlatedFindings) {
@@ -207,39 +169,41 @@ export class ScanExecutor {
         }
       }
 
-      // Always persist to local fileStore for reliable unified sync
-      try {
-        const dataDir = process.env.NODE_ENV === 'production' ? '/tmp/securelens-data' : join(process.cwd(), '.securelens-data');
-        const findingsFile = join(dataDir, 'findings.json');
-        mkdirSync(dirname(findingsFile), { recursive: true });
-        let existing: any[] = [];
-        if (existsSync(findingsFile)) {
-          try { existing = JSON.parse(readFileSync(findingsFile, 'utf8')); } catch {}
+      // Local findings storage is development-only. Production uses PostgreSQL as the source of truth.
+      if (process.env.NODE_ENV !== 'production') {
+        try {
+          const dataDir = join(process.cwd(), '.securelens-data');
+          const findingsFile = join(dataDir, 'findings.json');
+          mkdirSync(dirname(findingsFile), { recursive: true });
+          let existing: any[] = [];
+          if (existsSync(findingsFile)) {
+            try { existing = JSON.parse(readFileSync(findingsFile, 'utf8')); } catch {}
+          }
+          const nowIso = new Date().toISOString();
+          const recordsToAppend = correlatedFindings.map((finding, idx) => ({
+            id: `f-${scanId}-${idx}`,
+            scanId,
+            workspaceId,
+            title: finding.title,
+            description: finding.description || finding.title,
+            severity: finding.severity || 'MEDIUM',
+            status: 'NEW',
+            source: finding.sources?.[0]?.tool || 'Live Scanner',
+            category: finding.category || 'Vulnerability',
+            target,
+            cvss: finding.cvss ?? null,
+            cwe: finding.cwe ?? null,
+            owasp: finding.owasp ?? null,
+            remediation: finding.remediation || 'Review and apply latest security updates.',
+            createdAt: nowIso,
+            firstSeen: nowIso,
+            updatedAt: nowIso,
+          }));
+          const merged = [...recordsToAppend, ...existing.filter(entry => entry.scanId !== scanId)];
+          writeFileSync(findingsFile, JSON.stringify(merged, null, 2), 'utf8');
+        } catch (err: any) {
+          this.logger.warn(`Development file-store write failed: ${err.message}`);
         }
-        const nowIso = new Date().toISOString();
-        const recordsToAppend = correlatedFindings.map((c, idx) => ({
-          id: `f-${scanId}-${idx}`,
-          scanId,
-          workspaceId: workspaceId || 'default-workspace',
-          title: c.title,
-          description: c.description || c.title,
-          severity: c.severity || 'MEDIUM',
-          status: 'NEW',
-          source: c.sources?.[0]?.tool || 'Live Scanner',
-          category: c.category || 'Vulnerability',
-          target,
-          cvss: c.cvss ?? null,
-          cwe: c.cwe ?? null,
-          owasp: c.owasp ?? null,
-          remediation: c.remediation || 'Review and apply latest security updates.',
-          createdAt: nowIso,
-          firstSeen: nowIso,
-          updatedAt: nowIso,
-        }));
-        const merged = [...recordsToAppend, ...existing.filter(e => e.scanId !== scanId)];
-        writeFileSync(findingsFile, JSON.stringify(merged, null, 2), 'utf8');
-      } catch (err: any) {
-        this.logger.warn(`FileStore findings write error: ${err.message}`);
       }
 
       const riskScore = this.computeRiskScore(createdFindings.map(f => f.severity));
