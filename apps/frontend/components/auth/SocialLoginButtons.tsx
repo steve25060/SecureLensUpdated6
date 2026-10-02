@@ -87,6 +87,7 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
   const [githubOrg, setGithubOrg] = useState("SecureLens-Team");
 
   const [loadingAction, setLoadingAction] = useState(false);
+  const demoAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_DEMO_AUTH === "true";
   const router = useRouter();
 
   const handleOAuthSuccess = (userData: {
@@ -141,24 +142,9 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
           setShowGitHubModal(false);
           router.push("/dashboard");
         })
-        .catch(() => {
-          // Local fallback in case network issues
-          const token = `local_${userData.provider}_${Date.now()}`;
-          localStorage.setItem("access_token", token);
-          localStorage.setItem("sl_token", token);
-          localStorage.setItem("user", JSON.stringify(userData));
-          localStorage.setItem("user_email", userData.email);
-          localStorage.setItem("user_name", userData.name);
-
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("userProfileUpdated", { detail: userData }));
-          }
-
-          hydrateUserScanStorage(userData.email);
-
-          setShowGoogleModal(false);
-          setShowGitHubModal(false);
-          router.push("/dashboard");
+        .catch((error) => {
+          console.error("Demo authentication failed:", error);
+          setLoadingAction(false);
         });
     } catch {
       router.push("/dashboard");
@@ -196,23 +182,25 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
         </button>
       </div>
 
-      <div className="flex items-center justify-center gap-2 text-[11px] text-gray-500 pt-0.5">
-        <button
-          type="button"
-          onClick={() => setShowGoogleModal(true)}
-          className="hover:text-violet-300 transition-colors cursor-pointer"
-        >
-          Demo Google Account
-        </button>
-        <span>•</span>
-        <button
-          type="button"
-          onClick={() => setShowGitHubModal(true)}
-          className="hover:text-violet-300 transition-colors cursor-pointer"
-        >
-          Demo GitHub Account
-        </button>
-      </div>
+      {demoAuthEnabled && (
+        <div className="flex items-center justify-center gap-2 text-[11px] text-gray-500 pt-0.5">
+          <button
+            type="button"
+            onClick={() => setShowGoogleModal(true)}
+            className="hover:text-violet-300 transition-colors cursor-pointer"
+          >
+            Demo Google Account
+          </button>
+          <span>•</span>
+          <button
+            type="button"
+            onClick={() => setShowGitHubModal(true)}
+            className="hover:text-violet-300 transition-colors cursor-pointer"
+          >
+            Demo GitHub Account
+          </button>
+        </div>
+      )}
 
       {/* ─── GOOGLE ACCOUNT SELECTION MODAL ─── */}
       <AnimatePresence>
