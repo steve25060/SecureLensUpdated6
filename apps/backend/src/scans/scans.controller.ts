@@ -32,6 +32,21 @@ export class ScansController {
     return this.scansService.getConstants();
   }
 
+  // ===== AUTHENTICATED LIVE SCAN =====
+
+  @Get('stats')
+  @UseGuards(JwtAuthGuard)
+  getStats(@Req() req: AuthRequest) {
+    const userId = req.user?.id || req.user?.userId || '';
+    return this.scansService.getStats(userId);
+  }
+
+  @Get('workspace/:workspaceId')
+  @UseGuards(JwtAuthGuard)
+  getWorkspaceScans(@Param('workspaceId') workspaceId: string) {
+    return this.scansService.getWorkspaceScans(workspaceId);
+  }
+
   @Get(':id/status')
   @UseGuards(JwtAuthGuard)
   getScanStatus(@Param('id') id: string) {
@@ -55,8 +70,6 @@ export class ScansController {
   findOne(@Param('id') id: string) {
     return this.scansService.findOne(id);
   }
-
-  // ===== AUTHENTICATED LIVE SCAN =====
 
   @Post('create')
   @UseGuards(JwtAuthGuard)
@@ -100,19 +113,6 @@ export class ScansController {
   @UseGuards(JwtAuthGuard)
   remove(@Param('id') id: string) {
     return this.scansService.remove(id);
-  }
-
-  @Get('workspace/:workspaceId')
-  @UseGuards(JwtAuthGuard)
-  getWorkspaceScans(@Param('workspaceId') workspaceId: string) {
-    return this.scansService.getWorkspaceScans(workspaceId);
-  }
-
-  @Get('stats')
-  @UseGuards(JwtAuthGuard)
-  getStats(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.getStats(userId);
   }
 
   @Get()
