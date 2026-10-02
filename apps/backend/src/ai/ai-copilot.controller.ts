@@ -5,19 +5,44 @@ import {
   Body,
   UseGuards,
   HttpCode,
+  Req,
+  NotFoundException,
 } from '@nestjs/common';
-import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt.guard';
 import { AICopilotService, AIProvider, ChatMessage } from './ai-copilot.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UnifiedFinding } from '@securelens/findings-schema';
 
 @Controller(['ai-copilot', 'ai'])
-@UseGuards(OptionalJwtAuthGuard)
+@UseGuards(JwtAuthGuard)
+interface AIAuthRequest {
+  user?: { id?: string; userId?: string };
+}
+
 export class AICopilotController {
   constructor(
     private aiCopilot: AICopilotService,
     private prisma: PrismaService,
   ) {}
+
+  private userId(req: AIAuthRequest): string {
+    return req.user?.id || req.user?.userId || '';
+  }
+
+  private async findOwnedFinding(findingId: string, userId: string) {
+    const finding = await this.prisma.finding.findFirst({
+      where: {
+        id: findingId,
+        workspace: { userId },
+      },
+    });
+
+    if (!finding) {
+      throw new NotFoundException('Finding not found');
+    }
+
+    return finding;
+  }
 
   /**
    * Real-time Interactive Chat
@@ -25,6 +50,7 @@ export class AICopilotController {
   @Post('chat')
   @HttpCode(200)
   async chat(
+    @Req() req: AIAuthRequest,
     @Body()
     body: {
       messages?: ChatMessage[];
@@ -43,9 +69,7 @@ export class AICopilotController {
     try {
       let findingContext = body.findingContext;
       if (body.findingId && !findingContext && this.prisma.connected) {
-        findingContext = await this.prisma.finding.findUnique({
-          where: { id: body.findingId },
-        });
+        findingContext = await this.findOwnedFinding(body.findingId, this.userId(req));
       }
 
       let messages: ChatMessage[] = body.messages || [];
@@ -118,15 +142,9 @@ export class AICopilotController {
    */
   @Post('explain')
   @HttpCode(200)
-  async explainFinding(@Body() body: { findingId: string }) {
+  async explainFinding(@Req() req: AIAuthRequest, @Body() body: { findingId: string }) {
     try {
-      const finding = await this.prisma.finding.findUnique({
-        where: { id: body.findingId },
-      });
-
-      if (!finding) {
-        return { error: 'Finding not found' };
-      }
+      const finding = await this.findOwnedFinding(body.findingId, this.userId(req));
 
       const unifiedFinding = this.convertToUnifiedFinding(finding);
       const explanation = await this.aiCopilot.explainFinding(unifiedFinding);
@@ -149,15 +167,9 @@ export class AICopilotController {
    */
   @Post('remediate')
   @HttpCode(200)
-  async suggestRemediation(@Body() body: { findingId: string }) {
+  async suggestRemediation(@Req() req: AIAuthRequest, @Body() body: { findingId: string }) {
     try {
-      const finding = await this.prisma.finding.findUnique({
-        where: { id: body.findingId },
-      });
-
-      if (!finding) {
-        return { error: 'Finding not found' };
-      }
+      const finding = await this.findOwnedFinding(body.findingId, this.userId(req));
 
       const unifiedFinding = this.convertToUnifiedFinding(finding);
       const remediation = await this.aiCopilot.suggestRemediation(unifiedFinding);
@@ -180,15 +192,9 @@ export class AICopilotController {
    */
   @Post('attack-scenario')
   @HttpCode(200)
-  async explainAttackScenario(@Body() body: { findingId: string }) {
+  async explainAttackScenario(@Req() req: AIAuthRequest, @Body() body: { findingId: string }) {
     try {
-      const finding = await this.prisma.finding.findUnique({
-        where: { id: body.findingId },
-      });
-
-      if (!finding) {
-        return { error: 'Finding not found' };
-      }
+      const finding = await this.findOwnedFinding(body.findingId, this.userId(req));
 
       const unifiedFinding = this.convertToUnifiedFinding(finding);
       const scenario = await this.aiCopilot.explainAttackScenario(unifiedFinding);
@@ -204,15 +210,9 @@ export class AICopilotController {
    */
   @Post('code-example')
   @HttpCode(200)
-  async generateCodeExample(@Body() body: { findingId: string }) {
+  async generateCodeExample(@Req() req: AIAuthRequest, @Body() body: { findingId: string }) {
     try {
-      const finding = await this.prisma.finding.findUnique({
-        where: { id: body.findingId },
-      });
-
-      if (!finding) {
-        return { error: 'Finding not found' };
-      }
+      const finding = await this.findOwnedFinding(body.findingId, this.userId(req));
 
       const unifiedFinding = this.convertToUnifiedFinding(finding);
       const code = await this.aiCopilot.generateSecureCodeExample(unifiedFinding);
@@ -229,16 +229,11 @@ export class AICopilotController {
   @Post('question')
   @HttpCode(200)
   async answerQuestion(
+    @Req() req: AIAuthRequest,
     @Body() body: { findingId: string; question: string },
   ) {
     try {
-      const finding = await this.prisma.finding.findUnique({
-        where: { id: body.findingId },
-      });
-
-      if (!finding) {
-        return { error: 'Finding not found' };
-      }
+      const finding = await this.findOwnedFinding(body.findingId, this.userId(req));
 
       const unifiedFinding = this.convertToUnifiedFinding(finding);
       const answer = await this.aiCopilot.answerQuestion(
