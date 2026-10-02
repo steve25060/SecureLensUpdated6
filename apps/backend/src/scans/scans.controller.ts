@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Req, Delete } from '@nestjs/common';
-import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt.guard';
 import { ScansService } from './scans.service';
 
 interface AuthRequest { user?: { id?: string; userId?: string } }
@@ -33,86 +33,90 @@ export class ScansController {
   }
 
   @Get(':id/status')
+  @UseGuards(JwtAuthGuard)
   getScanStatus(@Param('id') id: string) {
     return this.scansService.getScanStatus(id);
   }
 
   @Get(':id/results')
+  @UseGuards(JwtAuthGuard)
   getScanResults(@Param('id') id: string) {
     return this.scansService.getScanResults(id);
   }
 
   @Get(':id/logs')
+  @UseGuards(JwtAuthGuard)
   getLogs(@Param('id') id: string) {
     return this.scansService.getLogs(id);
   }
 
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
   findOne(@Param('id') id: string) {
     return this.scansService.findOne(id);
   }
 
-  // ===== AUTHENTICATED & GUEST LIVE SCAN =====
+  // ===== AUTHENTICATED LIVE SCAN =====
 
   @Post('create')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   create(@Req() req: AuthRequest, @Body() body: any) {
     const userId = req.user?.id || req.user?.userId || '';
     return this.scansService.create(userId, body);
   }
 
   @Post(':id/start')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   startScan(@Param('id') id: string) {
     return this.scansService.startScan(id);
   }
 
   @Delete(':id/cancel')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   cancelScan(@Param('id') id: string) {
     return this.scansService.cancelScan(id);
   }
 
   @Delete('bulk')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   removeBulk(@Body() body: { ids: string[] }) {
     return this.scansService.removeBulk(body?.ids || []);
   }
 
   @Delete('target/:target')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   removeByTarget(@Param('target') target: string) {
     return this.scansService.removeByTarget(decodeURIComponent(target));
   }
 
   @Delete('all')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   removeAll(@Req() req: AuthRequest) {
     const userId = req.user?.id || req.user?.userId || '';
     return this.scansService.removeAll(userId);
   }
 
   @Delete(':id')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   remove(@Param('id') id: string) {
     return this.scansService.remove(id);
   }
 
   @Get('workspace/:workspaceId')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   getWorkspaceScans(@Param('workspaceId') workspaceId: string) {
     return this.scansService.getWorkspaceScans(workspaceId);
   }
 
   @Get('stats')
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   getStats(@Req() req: AuthRequest) {
     const userId = req.user?.id || req.user?.userId || '';
     return this.scansService.getStats(userId);
   }
 
   @Get()
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   findAll(@Req() req: AuthRequest) {
     const userId = req.user?.id || req.user?.userId || '';
     return this.scansService.findAll(userId);
