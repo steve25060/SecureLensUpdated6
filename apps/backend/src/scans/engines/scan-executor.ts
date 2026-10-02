@@ -93,9 +93,11 @@ export class ScanExecutor {
           if (onProgress) {
             onProgress(pct, { ts: now(), level: 'info', message: `Progress: ${pct}%` });
           }
-          this.prisma.scan.update({
+          void this.prisma.scan.update({
             where: { id: scanId },
             data: { progress: pct },
+          }).catch((err) => {
+            this.logger.warn(`Failed to persist scan progress: ${err?.message ?? err}`);
           });
         },
       });
