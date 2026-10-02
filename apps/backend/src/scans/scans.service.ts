@@ -356,7 +356,7 @@ export class ScansService {
     // Mark RUNNING
     await this.setStatus(scanId, 'RUNNING', { progress: 0, startedAt: new Date() as any });
 
-    const userId = scan.userId;
+    const ownerUserId = scan.userId;
     const workspaceId = scan.workspaceId;
     const target = scan.target;
     const engines: string[] = scan.engines ?? [];
@@ -379,7 +379,7 @@ export class ScansService {
           if (result.findingsCreated > 0) {
             const critical = result.findings.filter(f => f.severity === 'CRITICAL').length;
             await this.notifications.create({
-              userId,
+              userId: ownerUserId,
               title: 'Scan Completed',
               body: `Scan of ${target} found ${result.findingsCreated} finding${result.findingsCreated === 1 ? '' : 's'} (risk score ${result.riskScore}/100).`,
               type: critical > 0 ? 'error' : 'success',
@@ -388,7 +388,7 @@ export class ScansService {
             });
             if (critical > 0) {
               await this.notifications.create({
-                userId,
+                userId: ownerUserId,
                 title: `${critical} Critical Finding${critical === 1 ? '' : 's'}`,
                 body: `Scan of ${target} reported ${critical} critical-severity issue${critical === 1 ? '' : 's'}. Review immediately.`,
                 type: 'error',
@@ -398,7 +398,7 @@ export class ScansService {
             }
           } else {
             await this.notifications.create({
-              userId,
+              userId: ownerUserId,
               title: 'Scan Completed',
               body: `Scan of ${target} completed with no findings. Nice work!`,
               type: 'success',
