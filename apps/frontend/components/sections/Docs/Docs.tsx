@@ -295,12 +295,12 @@ jobs:
     overview: 'Quick answers and remediation steps for network connectivity, authentication, and scan execution questions.',
     sections: [
       {
-        heading: 'Render Cloud Free-Tier Hibernation (502 / 503)',
-        content: 'Free cloud containers go into sleep mode after 15 minutes of inactivity. When a request is received, the host initiates a cold start which takes 30-50 seconds:',
+        heading: 'Railway Deployment Connectivity (502 / 503)',
+        content: 'If the deployed service returns 502/503, verify the Railway deployment state, health check, service variables, and PostgreSQL connectivity before retrying:',
         keyPoints: [
-          'Wait 30-45 seconds on initial load while the backend container wakes up.',
-          'SecureLens includes an automatic retry client and offline fallback mode so the UI remains fully responsive.',
-          'Once awake, subsequent scans and API requests respond in sub-seconds.'
+          'Check the Railway deployment logs and confirm the backend /health endpoint returns HTTP 200.',
+          'Confirm DATABASE_URL and JWT_SECRET are configured on the backend service and that the frontend BACKEND_URL points to the backend Railway domain.',
+          'If a deployment was just rebuilt, wait for Railway to mark it healthy before testing scans or AI provider connections.'
         ]
       },
       {
