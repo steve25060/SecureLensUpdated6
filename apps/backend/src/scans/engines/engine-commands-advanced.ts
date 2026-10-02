@@ -348,56 +348,56 @@ const parseGitHubScannerOutput = (output: string): FindingTemplate[] => {
 
 const repository_overview_command: EngineCommandConfig = {
   description: 'Detect languages, frameworks, package managers, and structure',
-  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview"',
   timeout: 45,
   parser: parseGitHubScannerOutput,
 };
 
 const code_security_command: EngineCommandConfig = {
   description: 'Code Security Check (Semgrep OSS - Static Application Security Testing)',
-  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security"',
   timeout: 60,
   parser: parseGitHubScannerOutput,
 };
 
 const secret_detection_command: EngineCommandConfig = {
   description: 'Secret Detection (Gitleaks - Exposed API Keys, Tokens & Passwords)',
-  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection"',
   timeout: 45,
   parser: parseGitHubScannerOutput,
 };
 
 const dependency_analysis_command: EngineCommandConfig = {
   description: 'Dependency Security Check (Trivy - Vulnerable Package & Supply Chain Flaws)',
-  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis"',
   timeout: 60,
   parser: parseGitHubScannerOutput,
 };
 
 const infrastructure_security_command: EngineCommandConfig = {
   description: 'Infrastructure Security Check (Checkov - Terraform, Kubernetes & IaC Misconfigurations)',
-  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security"',
   timeout: 60,
   parser: parseGitHubScannerOutput,
 };
 
 const cicd_security_command: EngineCommandConfig = {
   description: 'CI/CD & Pipeline Security Check (GitHub Actions Workflow Auditor)',
-  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security"',
   timeout: 45,
   parser: parseGitHubScannerOutput,
 };
 
 const license_compliance_command: EngineCommandConfig = {
   description: 'License Compliance & Legal Risk Check (Open-Source License & Legal Compliance)',
-  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance"',
   timeout: 30,
   parser: parseGitHubScannerOutput,
 };
 
 const container_security_command: EngineCommandConfig = {
   description: 'Container & Dockerfile Security Check (Base Images, Root Execution & Container Hardening)',
-  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security"',
   timeout: 45,
   parser: parseGitHubScannerOutput,
 };
@@ -715,59 +715,59 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 20 -dast -severity critical,high,medium,low -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,http/cves,network,ssl', timeout: 240 },
   },
   repository_overview: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 20 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" --deep --ast-full 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 90 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview"', timeout: 20 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" --deep --ast-full', timeout: 90 },
   },
   code_security: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" --deep --ast-full --all-rules 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" --deep --ast-full --all-rules', timeout: 150 },
   },
   secret_detection: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" --deep --all-commits --history 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection"', timeout: 25 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" --deep --all-commits --history', timeout: 120 },
   },
   dependency_analysis: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive', timeout: 150 },
   },
   infrastructure_security: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" --deep --checkov-full 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" --deep --checkov-full', timeout: 150 },
   },
   cicd_security: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" --deep --actions-audit 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security"', timeout: 25 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" --deep --actions-audit', timeout: 120 },
   },
   license_compliance: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 20 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" --deep --gpl-audit 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 90 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance"', timeout: 20 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance"', timeout: 30 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" --deep --gpl-audit', timeout: 90 },
   },
   container_security: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" --deep --docker-cis 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security"', timeout: 25 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" --deep --docker-cis', timeout: 120 },
   },
   secret_finder: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" --deep --all-commits --history 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection"', timeout: 25 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" --deep --all-commits --history', timeout: 120 },
   },
   code_scanner: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" --deep --ast-full --all-rules 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" --deep --ast-full --all-rules', timeout: 150 },
   },
   container_checker: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive', timeout: 150 },
   },
   vulnerability_scanner: {
     fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures', timeout: 30 },
