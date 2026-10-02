@@ -1,50 +1,50 @@
 import { Controller, Get, Post, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
-import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt.guard';
 import { ReportsService } from './reports.service';
 
 interface AuthRequest { user?: { userId?: string; id?: string } }
 
 @Controller('reports')
-@UseGuards(OptionalJwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  private userId(req: AuthRequest): string {
+    return req.user?.id || req.user?.userId || '';
+  }
+
   @Get()
   findAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.reportsService.findAll(userId);
+    return this.reportsService.findAll(this.userId(req));
   }
 
   @Get('stats')
   getStats(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.reportsService.getStats(userId);
+    return this.reportsService.getStats(this.userId(req));
   }
 
   @Post()
   create(@Req() req: AuthRequest, @Body() body: any) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.reportsService.create(userId, body ?? {});
+    return this.reportsService.create(this.userId(req), body ?? {});
   }
 
   @Delete('bulk')
-  removeBulk(@Body() body: { ids: string[] }) {
-    return this.reportsService.removeBulk(body?.ids || []);
+  removeBulk(@Req() req: AuthRequest, @Body() body: { ids: string[] }) {
+    return this.reportsService.removeBulk(body?.ids || [], this.userId(req));
   }
 
   @Delete('all')
   removeAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.reportsService.removeAll(userId);
+    return this.reportsService.removeAll(this.userId(req));
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.reportsService.findOne(id);
+  findOne(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.reportsService.findOne(id, this.userId(req));
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.reportsService.remove(id);
+  remove(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.reportsService.remove(id, this.userId(req));
   }
 }
