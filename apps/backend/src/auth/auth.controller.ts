@@ -59,8 +59,8 @@ export class AuthController {
     const googleConfigured = Boolean(googleId && !googleId.startsWith('your_') && googleId !== 'placeholder');
     const githubConfigured = Boolean(githubId && !githubId.startsWith('your_') && githubId !== 'placeholder');
     return {
-      google: { enabled: true, isConfigured: googleConfigured },
-      github: { enabled: true, isConfigured: githubConfigured },
+      google: { enabled: googleConfigured, isConfigured: googleConfigured },
+      github: { enabled: githubConfigured, isConfigured: githubConfigured },
     };
   }
 
