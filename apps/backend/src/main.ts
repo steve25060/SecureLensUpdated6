@@ -11,11 +11,11 @@ async function bootstrap() {
   if (process.env.NODE_ENV === 'production') {
     try {
       const prisma = app.get(PrismaService);
-      logger.log('Running database migrations...');
-      await prisma.$executeRawUnsafe('SELECT 1'); // Test connection
+      logger.log('Verifying database connection...');
+      await prisma.$queryRaw`SELECT 1`; // Test connection
       logger.log('Database connection verified ✓');
     } catch (error) {
-      logger.warn('Database migration check failed (may retry on next restart):', error.message);
+      logger.warn(`Database connection check failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -30,7 +30,7 @@ async function bootstrap() {
   const defaultOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
-    'https://securelens-frontend.onrender.com',
+    'https://web-production-13bf9.up.railway.app',
   ];
 
   const envOrigins = (process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || process.env.CORS_ORIGIN || '')
@@ -43,15 +43,14 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (
-        allowedOrigins.includes(origin) ||
-        origin.endsWith('.onrender.com') ||
-        origin.endsWith('.railway.app') ||
-        origin.includes('localhost')
-      ) {
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(null, true);
+      if (nodeEnv !== 'production' && origin.includes('localhost')) {
+        return callback(null, true);
+      }
+      logger.warn(`Blocked CORS origin: ${origin}`);
+      return callback(new Error('Origin not allowed by CORS'), false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
