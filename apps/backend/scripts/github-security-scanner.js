@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 
 function calculateDevSecOpsScore(findings) {
   if (!findings || findings.length === 0) return 98;
@@ -390,15 +390,17 @@ async function runGitHubScan(targetRepo, engineFilter = 'all') {
 
     addLog('info', 'repository_overview', `Cloning repository: ${targetRepo} (depth: 1)`);
     try {
-      execSync(`git clone --depth 1 "${targetRepo}" "${repoPath}" 2>/dev/null`, { timeout: 45000 });
-      addLog('success', 'repository_overview', `Repository successfully cloned to workspace`);
+      execFileSync('git', ['clone', '--depth', '1', targetRepo, repoPath], {
+        timeout: 45000,
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+      addLog('success', 'repository_overview', 'Repository successfully cloned to workspace');
     } catch (err) {
-      addLog('warn', 'repository_overview', `Git clone failed or restricted. Performing deep heuristic static analysis.`);
-      repoPath = process.cwd();
-      isTempClone = false;
+      addLog('error', 'repository_overview', `Git clone failed: ${err?.message || err}`);
+      throw new Error('Unable to clone the requested repository');
     }
   } else if (!fs.existsSync(repoPath)) {
-    repoPath = process.cwd();
+    throw new Error(`Repository path does not exist: ${repoPath}`);
   }
 
   // 2. Discover all repository files & classify topology
@@ -555,7 +557,11 @@ async function runGitHubScan(targetRepo, engineFilter = 'all') {
 
     // Execute Semgrep binary if available
     try {
-      const semgrepOutput = execSync(`semgrep --config=auto --json "${repoPath}" 2>/dev/null`, { timeout: 35000, encoding: 'utf-8' });
+      const semgrepOutput = execFileSync('semgrep', ['--config=auto', '--json', repoPath], {
+        timeout: 35000,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
       if (semgrepOutput && semgrepOutput.trim()) {
         const parsed = JSON.parse(semgrepOutput);
         (parsed.results || []).forEach(res => {
@@ -620,7 +626,16 @@ async function runGitHubScan(targetRepo, engineFilter = 'all') {
     // Try executing system gitleaks if installed
     try {
       const gitleaksBin = process.env.GITLEAKS_BIN || 'gitleaks';
-      const gitleaksOutput = execSync(`${gitleaksBin} detect --source="${repoPath}" --no-git --report-format=json 2>/dev/null`, { timeout: 20000, encoding: 'utf-8' });
+      const gitleaksOutput = execFileSync(gitleaksBin, [
+        'detect',
+        `--source=${repoPath}`,
+        '--no-git',
+        '--report-format=json',
+      ], {
+        timeout: 20000,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
       if (gitleaksOutput && gitleaksOutput.trim()) {
         const items = JSON.parse(gitleaksOutput);
         (Array.isArray(items) ? items : []).forEach(item => {
@@ -1013,7 +1028,7 @@ async function runGitHubScan(targetRepo, engineFilter = 'all') {
   // Clean up temporary clone directory
   if (isTempClone && fs.existsSync(repoPath)) {
     try {
-      execSync(`rm -rf "${repoPath}"`, { timeout: 10000 });
+      fs.rmSync(repoPath, { recursive: true, force: true });
     } catch {}
   }
 
