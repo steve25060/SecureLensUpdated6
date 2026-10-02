@@ -66,7 +66,7 @@ const INITIAL_MESSAGES: ChatMessage[] = [
 function AICopilotContent() {
   const searchParams = useSearchParams();
   const { scans: liveScans, findings: liveFindings, lastUpdated } = useLiveScanSync(1000);
-  
+
   // Real-time synchronization
   const { isLive, eventCount, lastEventType } = useRealtimeSync();
   const { findingAdded, totalFindingsAdded } = useRealtimeFindingEvents();
@@ -182,7 +182,7 @@ function AICopilotContent() {
     try {
       const storedConfig = localStorage.getItem('securelens_ai_config');
       if (storedConfig) aiConfig = JSON.parse(storedConfig);
-    } catch (e) {}
+    } catch (e) { }
 
     let aiKeys: any = {};
     try {
@@ -197,12 +197,21 @@ function AICopilotContent() {
           if (s.aiConfig && !aiConfig.primaryProvider) aiConfig = s.aiConfig;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const primaryProv = aiConfig.primaryProvider || 'gemini';
-    const activeApiKey = aiKeys?.[primaryProv]?.apiKey || 
+    const activeApiKey = aiKeys?.[primaryProv]?.apiKey ||
       (typeof window !== 'undefined' ? (localStorage.getItem('securelens_gemini_key') || '') : '');
-    const activeModel = aiKeys?.[primaryProv]?.model || aiConfig.model || (primaryProv === 'gemini' ? 'gemini-3.5-flash-lite' : primaryProv === 'openrouter' ? 'nvidia/nemotron-3.5-lightning:free' : 'llama-3.3-70b-versatile');
+    const providerDefaultModels: Record<string, string> = {
+      gemini: 'gemini-3.5-flash-lite',
+      groq: 'openai/gpt-oss-120b',
+      openrouter: 'nvidia/nemotron-3.5-lightning:free',
+      openai: 'gpt-4o-mini',
+      claude: 'claude-3-5-sonnet-20241022',
+      ollama: 'llama3.3',
+      deepseek: 'deepseek-flash',
+    };
+    const activeModel = aiKeys?.[primaryProv]?.model || aiConfig.model || providerDefaultModels[primaryProv] || 'gemini-3.5-flash-lite';
 
     const safeLiveScans = Array.isArray(liveScans) ? liveScans.slice(0, 5) : [];
     const safeLiveFindings = Array.isArray(liveFindings) ? liveFindings.slice(0, 20) : [];
@@ -231,6 +240,14 @@ function AICopilotContent() {
           }
         }),
       });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const bodyPreview = (await response.text()).slice(0, 160);
+        throw new Error(
+          `Backend returned ${response.status} ${response.statusText} instead of JSON${bodyPreview ? `: ${bodyPreview}` : ''}`,
+        );
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -392,20 +409,20 @@ function AICopilotContent() {
                         <div className="text-xs sm:text-sm text-gray-200 leading-relaxed overflow-x-auto space-y-1.5">
                           <ReactMarkdown
                             components={{
-                              h1: ({node, ...props}) => <h1 className="text-sm font-bold text-white mt-2 mb-1 border-b border-white/[0.08] pb-1" {...props} />,
-                              h2: ({node, ...props}) => <h2 className="text-xs font-bold text-violet-300 mt-2 mb-1" {...props} />,
-                              h3: ({node, ...props}) => <h3 className="text-xs font-semibold text-gray-200 mt-1 mb-0.5" {...props} />,
-                              p: ({node, ...props}) => <p className="mb-1.5 leading-relaxed text-gray-300" {...props} />,
-                              ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-0.5 mb-1.5 text-gray-300" {...props} />,
-                              ol: ({node, ...props}) => <ol className="list-decimal pl-4 space-y-0.5 mb-1.5 text-gray-300" {...props} />,
-                              code: ({node, className, children, ...props}) => {
+                              h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-white mt-2 mb-1 border-b border-white/[0.08] pb-1" {...props} />,
+                              h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-violet-300 mt-2 mb-1" {...props} />,
+                              h3: ({ node, ...props }) => <h3 className="text-xs font-semibold text-gray-200 mt-1 mb-0.5" {...props} />,
+                              p: ({ node, ...props }) => <p className="mb-1.5 leading-relaxed text-gray-300" {...props} />,
+                              ul: ({ node, ...props }) => <ul className="list-disc pl-4 space-y-0.5 mb-1.5 text-gray-300" {...props} />,
+                              ol: ({ node, ...props }) => <ol className="list-decimal pl-4 space-y-0.5 mb-1.5 text-gray-300" {...props} />,
+                              code: ({ node, className, children, ...props }) => {
                                 return (
                                   <code className="bg-black/50 text-violet-300 px-1 py-0.5 rounded text-[11px] font-mono border border-white/10" {...props}>
                                     {children}
                                   </code>
                                 );
                               },
-                              pre: ({node, ...props}) => (
+                              pre: ({ node, ...props }) => (
                                 <pre className="bg-[#07090e] p-2.5 rounded-lg border border-white/[0.08] overflow-x-auto text-xs font-mono text-gray-200 my-1.5" {...props} />
                               ),
                             }}
@@ -479,7 +496,7 @@ function AICopilotContent() {
                   </span>
                 )}
               </div>
-              
+
               <div className="flex gap-2">
                 <input
                   type="text"
