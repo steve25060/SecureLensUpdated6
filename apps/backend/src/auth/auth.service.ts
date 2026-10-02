@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -73,10 +73,11 @@ export class AuthService {
       return this.issueToken(created);
     }
 
-    // DB query failed (offline, schema mismatch, etc.) — fall through to a
-    // working token so registration never returns a 500. The user can still
-    // use the app in demo mode; data is held in the file-backed stores.
-    this.logger.warn('DB unavailable during register — issuing personalized ephemeral token');
+    if (process.env.NODE_ENV === 'production') {
+      throw new ServiceUnavailableException('Database is unavailable');
+    }
+
+    this.logger.warn('DB unavailable during register — issuing development-only ephemeral token');
     return this.issueToken({
       id: `usr_${randomUUID().slice(0, 12)}`,
       email,
@@ -98,8 +99,7 @@ export class AuthService {
     const isDemoCreds =
       DEMO_USERS.includes(submitted.toLowerCase()) && loginDto.password === DEMO_PASSWORD;
 
-    // Check demo credentials FIRST - this ensures demo login always works
-    if (isDemoCreds) {
+    if (isDemoCreds && this.isDemoAuthEnabled()) {
       const seeded = await this.ensureDemoUser();
       if (seeded) return this.issueToken(seeded);
     }
@@ -185,9 +185,13 @@ export class AuthService {
 
     if (dbUser) return this.issueToken(dbUser);
 
-    // Fallback: Return a unique personalized token for this specific user
+    if (process.env.NODE_ENV === 'production') {
+      throw new ServiceUnavailableException('Database is unavailable');
+    }
+
+    // Development-only fallback token.
     const fallbackId = `usr_${profile.googleId || profile.githubId || randomUUID().slice(0, 8)}`;
-    this.logger.warn(`DB unavailable during OAuth login — issuing personalized token for ${email}`);
+    this.logger.warn(`DB unavailable during OAuth login — issuing development-only token for ${email}`);
     return this.issueToken({
       id: fallbackId,
       email,
@@ -197,6 +201,10 @@ export class AuthService {
       githubId: profile.githubId ?? null,
       googleId: profile.googleId ?? null,
     } as any);
+  }
+
+  private isDemoAuthEnabled() {
+    return process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEMO_AUTH === 'true';
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
