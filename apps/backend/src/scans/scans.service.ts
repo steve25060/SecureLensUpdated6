@@ -414,7 +414,7 @@ export class ScansService {
         await this.setStatus(scanId, 'FAILED', { errorMessage: err.message });
         try {
           await this.notifications.create({
-            userId,
+            userId: ownerUserId,
             title: 'Scan Failed',
             body: `Scan of ${target} failed: ${err.message}`,
             type: 'error',
