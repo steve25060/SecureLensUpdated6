@@ -102,6 +102,15 @@ export class ScanExecutor {
 
 
 
+      const completedEngineRuns = orchestrationResult.logs.filter(
+        log => log.level === 'info' && log.message.startsWith('Completed: Found'),
+      ).length;
+      if (engineIds.length > 0 && completedEngineRuns === 0) {
+        throw new Error(
+          'No selected scan engine completed successfully. Check scanner availability and execution logs.',
+        );
+      }
+
       // Normalize and store findings
       let correlatedFindings = orchestrationResult.correlatedFindings || [];
       
