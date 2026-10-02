@@ -23,6 +23,9 @@ export class OptionalJwtAuthGuard implements CanActivate {
     const authHeader = request.headers?.authorization || request.headers?.Authorization;
 
     if (!authHeader) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new UnauthorizedException('Authentication required');
+      }
       request.user = request.user || undefined;
       return true;
     }
