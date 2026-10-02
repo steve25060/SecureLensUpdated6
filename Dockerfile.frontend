@@ -1,33 +1,39 @@
-# Build stage
-FROM node:20-alpine AS builder
+# SecureLens Next.js frontend for Railway
 
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copy everything
+ARG BACKEND_URL=https://web-production-e3c1e.up.railway.app
+ARG NEXT_PUBLIC_BACKEND_URL=https://web-production-e3c1e.up.railway.app
+ARG NEXT_PUBLIC_API_URL=/api
+ARG NEXT_PUBLIC_APP_URL=https://web-production-13bf9.up.railway.app
+ARG NEXT_PUBLIC_ENABLE_DEMO_AUTH=false
+
+ENV BACKEND_URL=${BACKEND_URL}
+ENV NEXT_PUBLIC_BACKEND_URL=${NEXT_PUBLIC_BACKEND_URL}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV NEXT_PUBLIC_ENABLE_DEMO_AUTH=${NEXT_PUBLIC_ENABLE_DEMO_AUTH}
+
 COPY . .
-
-# Install dependencies
-RUN npm install -g pnpm
+RUN npm install -g pnpm@10
 RUN pnpm install --frozen-lockfile
+RUN cd apps/frontend && pnpm run build
 
-# Build frontend
-WORKDIR /app/apps/frontend
-RUN pnpm run build
-
-# Runtime stage
 FROM node:20-alpine
-
 WORKDIR /app/apps/frontend
 
-# Copy built app and public assets from builder
-COPY --from=builder /app/apps/frontend/.next .next
-COPY --from=builder /app/apps/frontend/public public
-COPY --from=builder /app/apps/frontend/package.json .
+RUN npm install -g pnpm@10
+
+COPY --from=builder /app/apps/frontend/.next ./.next
+COPY --from=builder /app/apps/frontend/public ./public
+COPY --from=builder /app/apps/frontend/package.json ./package.json
+COPY --from=builder /app/apps/frontend/next.config.js ./next.config.js
+COPY --from=builder /app/apps/frontend/node_modules ./node_modules
 COPY --from=builder /app/node_modules /app/node_modules
 
-# Install pnpm in runtime
-RUN npm install -g pnpm
+ENV NODE_ENV=production
 
-EXPOSE 8080
+EXPOSE 3000
 
 CMD ["pnpm", "start"]

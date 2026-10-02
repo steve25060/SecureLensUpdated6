@@ -1,4 +1,0 @@
-[build]
-# Ensure the public folder is copied to the output
-cmds = ["pnpm install --frozen-lockfile", "cd apps/frontend && pnpm run build"]
-# Include all files in final image

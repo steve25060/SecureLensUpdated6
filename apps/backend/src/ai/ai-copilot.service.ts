@@ -60,7 +60,7 @@ export class AICopilotService {
     openai: { apiKey: '', model: 'gpt-4o-mini', enabled: true },
     claude: { apiKey: '', model: 'claude-3-5-sonnet-20241022', enabled: true },
     deepseek: { apiKey: '', model: 'deepseek-flash', enabled: true },
-    ollama: { apiKey: 'http://localhost:11434', model: 'llama3.3', enabled: true },
+    ollama: { apiKey: '', model: 'llama3.3', enabled: true },
   };
 
   constructor(private configService: ConfigService) {
@@ -119,6 +119,10 @@ export class AICopilotService {
     apiKey?: string;
     model?: string;
   }) {
+    if (process.env.NODE_ENV === 'production' && process.env.ALLOW_RUNTIME_AI_CONFIG !== 'true') {
+      this.logger.warn('Ignoring global runtime AI configuration in production; use environment variables or request-scoped BYOK keys');
+      return;
+    }
     if (config.primaryProvider) {
       this.primaryProvider = config.primaryProvider;
     } else if (config.provider) {
@@ -172,7 +176,7 @@ export class AICopilotService {
         openai: { configured: !!this.providerRegistry.openai.apiKey, model: this.providerRegistry.openai.model, enabled: this.providerRegistry.openai.enabled !== false },
         claude: { configured: !!this.providerRegistry.claude.apiKey, model: this.providerRegistry.claude.model, enabled: this.providerRegistry.claude.enabled !== false },
         deepseek: { configured: !!this.providerRegistry.deepseek.apiKey, model: this.providerRegistry.deepseek.model, enabled: this.providerRegistry.deepseek.enabled !== false },
-        ollama: { configured: true, model: this.providerRegistry.ollama.model, enabled: this.providerRegistry.ollama.enabled !== false },
+        ollama: { configured: !!this.providerRegistry.ollama.apiKey, model: this.providerRegistry.ollama.model, enabled: this.providerRegistry.ollama.enabled !== false },
       },
       supportedProviders: [
         { id: 'gemini', name: 'Google Gemini (2.5 / 2.0 Flash)', free: true, url: 'https://aistudio.google.com/app/apikey', defaultModel: 'gemini-2.5-flash', configured: !!this.providerRegistry.gemini.apiKey },
@@ -181,7 +185,7 @@ export class AICopilotService {
         { id: 'openai', name: 'OpenAI (GPT-4o & o3-mini)', free: false, url: 'https://platform.openai.com/api-keys', defaultModel: 'gpt-4o-mini', configured: !!this.providerRegistry.openai.apiKey },
         { id: 'claude', name: 'Anthropic Claude (3.5 Sonnet & Haiku)', free: false, url: 'https://console.anthropic.com/', defaultModel: 'claude-3-5-sonnet-20241022', configured: !!this.providerRegistry.claude.apiKey },
         { id: 'deepseek', name: 'DeepSeek API (V4.1 Flash / V4 Pro)', free: false, url: 'https://platform.deepseek.com/api_keys', defaultModel: 'deepseek-flash', configured: !!this.providerRegistry.deepseek.apiKey },
-        { id: 'ollama', name: 'Local Ollama (Llama 3.3 / Qwen 2.5 / DeepSeek)', free: true, url: 'http://localhost:11434', defaultModel: 'llama3.3', configured: true },
+        { id: 'ollama', name: 'Ollama (self-hosted)', free: true, url: 'http://localhost:11434', defaultModel: 'llama3.3', configured: !!this.providerRegistry.ollama.apiKey },
       ],
     };
   }
@@ -215,23 +219,21 @@ export class AICopilotService {
    * Interactive multi-turn chat with automatic failover when rate limits are exceeded
    */
   async chat(options: ChatRequestOptions): Promise<{ reply: string; provider: string; model: string; failoverUsed?: boolean }> {
-    // If runtime keys were passed in the request body from client, register them temporarily
-    if (options.keysMap) {
-      for (const [p, val] of Object.entries(options.keysMap)) {
-        const prov = p as AIProvider;
-        if (this.providerRegistry[prov] && val.apiKey) {
-          this.providerRegistry[prov].apiKey = val.apiKey;
-          if (val.model) this.providerRegistry[prov].model = val.model;
-        }
-      }
-    }
+    // BYOK credentials are request-scoped. Never copy user-provided keys into
+    // the singleton provider registry, otherwise one user's key could be reused
+    // by another request handled by this NestJS process.
+    const requestKeys: Record<string, { apiKey: string; model?: string }> = {
+      ...(options.keysMap || {}),
+    };
     if (options.provider && options.apiKey) {
-      this.providerRegistry[options.provider].apiKey = options.apiKey;
-      if (options.model) this.providerRegistry[options.provider].model = options.model;
+      requestKeys[options.provider] = {
+        apiKey: options.apiKey,
+        model: options.model,
+      };
     }
 
     const primaryChoice = options.provider || this.primaryProvider;
-    const failoverQueue = this.buildFailoverQueue(primaryChoice, options.keysMap);
+    const failoverQueue = this.buildFailoverQueue(primaryChoice, requestKeys);
 
     const systemPrompt = `You are SecureLens AI Copilot, an elite cybersecurity and application security expert.
 Your job is to analyze security scan findings, explain vulnerabilities with precision (Root Cause, Attack Vector, CWE/OWASP mapping, CVSS 3.1 impact), and provide step-by-step code-level remediation.
@@ -247,8 +249,8 @@ ${options.findingContext ? `Current Finding Context: ${JSON.stringify(options.fi
     for (let i = 0; i < failoverQueue.length; i++) {
       const candidate = failoverQueue[i];
       const keyConfig = this.providerRegistry[candidate];
-      const apiKey = (options.keysMap && options.keysMap[candidate]?.apiKey) || keyConfig.apiKey;
-      const model = (options.keysMap && options.keysMap[candidate]?.model) || keyConfig.model || this.getDefaultModel(candidate);
+      const apiKey = requestKeys[candidate]?.apiKey || keyConfig.apiKey;
+      const model = requestKeys[candidate]?.model || keyConfig.model || this.getDefaultModel(candidate);
 
       if (!apiKey && candidate !== 'ollama') continue;
 

@@ -60,10 +60,11 @@ export const DOC_TOPICS: DocTopic[] = [
         codeSnippet: {
           language: 'bash',
           code: `# Launch an automated multi-vector scan via SecureLens API
-curl -X POST https://securelens-backend-o213.onrender.com/api/scans/website \\
+curl -X POST https://web-production-e3c1e.up.railway.app/api/scans/create \\
   -H "Authorization: Bearer <YOUR_SECURELENS_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{
+    "workspaceId": "<YOUR_WORKSPACE_ID>",
     "target": "https://example.com",
     "mode": "website",
     "profile": "normal",
@@ -154,8 +155,8 @@ http:
         content: 'Include your JWT token or Organization API key in the Authorization header of every request:',
         codeSnippet: {
           language: 'http',
-          code: `POST /api/scans/website HTTP/1.1
-Host: securelens-backend-o213.onrender.com
+          code: `POST /api/scans/create HTTP/1.1
+Host: web-production-e3c1e.up.railway.app
 Authorization: Bearer <YOUR_SECURELENS_API_KEY>
 Content-Type: application/json`
         }
@@ -165,8 +166,8 @@ Content-Type: application/json`
         content: 'Key REST endpoints for orchestrating scans, streaming telemetry, and querying findings:',
         keyPoints: [
           'POST /api/auth/login — User authentication and JWT generation.',
-          'POST /api/scans/website — Initiate a dynamic web application vulnerability scan.',
-          'POST /api/scans/github — Initiate static code analysis and dependency audit on a git repository.',
+          'POST /api/scans/create — Initiate a dynamic web application vulnerability scan.',
+          'POST /api/scans/create — Initiate static code analysis and dependency audit on a git repository.',
           'GET /api/scans — Retrieve scan history, filter by status, target, and risk score.',
           'GET /api/scans/:id — Query real-time scan progress, active phase, and telemetry logs.',
           'GET /api/findings — Query correlated security findings with severity, CVE, and category filters.',
@@ -262,7 +263,7 @@ jobs:
 
       - name: Trigger SecureLens SAST & Secret Scan
         run: |
-          curl -s -X POST https://securelens-backend-o213.onrender.com/api/scans/github \\
+          curl -s -X POST https://web-production-e3c1e.up.railway.app/api/scans/create \\
             -H "Authorization: Bearer \${{ secrets.SECURELENS_API_KEY }}" \\
             -H "Content-Type: application/json" \\
             -d '{
@@ -294,12 +295,12 @@ jobs:
     overview: 'Quick answers and remediation steps for network connectivity, authentication, and scan execution questions.',
     sections: [
       {
-        heading: 'Render Cloud Free-Tier Hibernation (502 / 503)',
-        content: 'Free cloud containers go into sleep mode after 15 minutes of inactivity. When a request is received, the host initiates a cold start which takes 30-50 seconds:',
+        heading: 'Railway Deployment Connectivity (502 / 503)',
+        content: 'If the deployed service returns 502/503, verify the Railway deployment state, health check, service variables, and PostgreSQL connectivity before retrying:',
         keyPoints: [
-          'Wait 30-45 seconds on initial load while the backend container wakes up.',
-          'SecureLens includes an automatic retry client and offline fallback mode so the UI remains fully responsive.',
-          'Once awake, subsequent scans and API requests respond in sub-seconds.'
+          'Check the Railway deployment logs and confirm the backend /health endpoint returns HTTP 200.',
+          'Confirm DATABASE_URL and JWT_SECRET are configured on the backend service and that the frontend BACKEND_URL points to the backend Railway domain.',
+          'If a deployment was just rebuilt, wait for Railway to mark it healthy before testing scans or AI provider connections.'
         ]
       },
       {
@@ -308,9 +309,9 @@ jobs:
         codeSnippet: {
           language: 'text',
           code: `Authorized Redirect URIs:
-https://securelens-backend-o213.onrender.com/api/auth/google/callback
-https://securelens-backend-o213.onrender.com/api/auth/github/callback
-https://securelens-frontend.onrender.com/callback`
+https://web-production-e3c1e.up.railway.app/api/auth/google/callback
+https://web-production-e3c1e.up.railway.app/api/auth/github/callback
+https://web-production-13bf9.up.railway.app/callback`
         }
       },
       {

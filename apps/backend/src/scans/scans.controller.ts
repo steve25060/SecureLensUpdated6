@@ -1,22 +1,18 @@
 import { Controller, Get, Post, Body, Param, UseGuards, Req, Delete } from '@nestjs/common';
-import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt.guard';
 import { ScansService } from './scans.service';
 
 interface AuthRequest { user?: { id?: string; userId?: string } }
 
-/**
- * Scan endpoints. Engine listing is PUBLIC (the live-scan page loads engines
- * before the user is fully authenticated); create/start require valid user or demo session.
- *
- * Engine names returned here are the friendly ones ("Port Scanner", etc.)
- * defined in engines/catalog.ts.
- */
 @Controller('scans')
 export class ScansController {
   constructor(private readonly scansService: ScansService) {}
 
-  // ===== PUBLIC (no auth) =====
+  private userId(req: AuthRequest): string {
+    return req.user?.id || req.user?.userId || '';
+  }
 
+  // Public engine metadata.
   @Get('engines/mode/:mode')
   getEnginesForMode(@Param('mode') mode: string) {
     return this.scansService.getEnginesForMode(mode);
@@ -32,89 +28,88 @@ export class ScansController {
     return this.scansService.getConstants();
   }
 
-  @Get(':id/status')
-  getScanStatus(@Param('id') id: string) {
-    return this.scansService.getScanStatus(id);
-  }
-
-  @Get(':id/results')
-  getScanResults(@Param('id') id: string) {
-    return this.scansService.getScanResults(id);
-  }
-
-  @Get(':id/logs')
-  getLogs(@Param('id') id: string) {
-    return this.scansService.getLogs(id);
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.scansService.findOne(id);
-  }
-
-  // ===== AUTHENTICATED & GUEST LIVE SCAN =====
-
-  @Post('create')
-  @UseGuards(OptionalJwtAuthGuard)
-  create(@Req() req: AuthRequest, @Body() body: any) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.create(userId, body);
-  }
-
-  @Post(':id/start')
-  @UseGuards(OptionalJwtAuthGuard)
-  startScan(@Param('id') id: string) {
-    return this.scansService.startScan(id);
-  }
-
-  @Delete(':id/cancel')
-  @UseGuards(OptionalJwtAuthGuard)
-  cancelScan(@Param('id') id: string) {
-    return this.scansService.cancelScan(id);
-  }
-
-  @Delete('bulk')
-  @UseGuards(OptionalJwtAuthGuard)
-  removeBulk(@Body() body: { ids: string[] }) {
-    return this.scansService.removeBulk(body?.ids || []);
-  }
-
-  @Delete('target/:target')
-  @UseGuards(OptionalJwtAuthGuard)
-  removeByTarget(@Param('target') target: string) {
-    return this.scansService.removeByTarget(decodeURIComponent(target));
-  }
-
-  @Delete('all')
-  @UseGuards(OptionalJwtAuthGuard)
-  removeAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.removeAll(userId);
-  }
-
-  @Delete(':id')
-  @UseGuards(OptionalJwtAuthGuard)
-  remove(@Param('id') id: string) {
-    return this.scansService.remove(id);
+  // Put static authenticated routes before :id routes.
+  @Get('stats')
+  @UseGuards(JwtAuthGuard)
+  getStats(@Req() req: AuthRequest) {
+    return this.scansService.getStats(this.userId(req));
   }
 
   @Get('workspace/:workspaceId')
-  @UseGuards(OptionalJwtAuthGuard)
-  getWorkspaceScans(@Param('workspaceId') workspaceId: string) {
-    return this.scansService.getWorkspaceScans(workspaceId);
+  @UseGuards(JwtAuthGuard)
+  getWorkspaceScans(@Req() req: AuthRequest, @Param('workspaceId') workspaceId: string) {
+    return this.scansService.getWorkspaceScans(workspaceId, this.userId(req));
   }
 
-  @Get('stats')
-  @UseGuards(OptionalJwtAuthGuard)
-  getStats(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.getStats(userId);
+  @Get(':id/status')
+  @UseGuards(JwtAuthGuard)
+  getScanStatus(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.getScanStatus(id, this.userId(req));
+  }
+
+  @Get(':id/results')
+  @UseGuards(JwtAuthGuard)
+  getScanResults(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.getScanResults(id, this.userId(req));
+  }
+
+  @Get(':id/logs')
+  @UseGuards(JwtAuthGuard)
+  getLogs(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.getLogs(id, this.userId(req));
+  }
+
+  @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  findOne(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.findOne(id, this.userId(req));
   }
 
   @Get()
-  @UseGuards(OptionalJwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   findAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.findAll(userId);
+    return this.scansService.findAll(this.userId(req));
+  }
+
+  @Post('create')
+  @UseGuards(JwtAuthGuard)
+  create(@Req() req: AuthRequest, @Body() body: any) {
+    return this.scansService.create(this.userId(req), body);
+  }
+
+  @Post(':id/start')
+  @UseGuards(JwtAuthGuard)
+  startScan(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.startScan(id, this.userId(req));
+  }
+
+  @Delete('bulk')
+  @UseGuards(JwtAuthGuard)
+  removeBulk(@Req() req: AuthRequest, @Body() body: { ids: string[] }) {
+    return this.scansService.removeBulk(body?.ids || [], this.userId(req));
+  }
+
+  @Delete('target/:target')
+  @UseGuards(JwtAuthGuard)
+  removeByTarget(@Req() req: AuthRequest, @Param('target') target: string) {
+    return this.scansService.removeByTarget(decodeURIComponent(target), this.userId(req));
+  }
+
+  @Delete('all')
+  @UseGuards(JwtAuthGuard)
+  removeAll(@Req() req: AuthRequest) {
+    return this.scansService.removeAll(this.userId(req));
+  }
+
+  @Delete(':id/cancel')
+  @UseGuards(JwtAuthGuard)
+  cancelScan(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.cancelScan(id, this.userId(req));
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  remove(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.remove(id, this.userId(req));
   }
 }

@@ -9,13 +9,19 @@ async function bootstrap() {
   
   // Run database migrations in production
   if (process.env.NODE_ENV === 'production') {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL is required in production');
+    }
+
     try {
       const prisma = app.get(PrismaService);
       logger.log('Verifying database connection...');
-      await prisma.$queryRaw`SELECT 1`; // Test connection
+      await prisma.$queryRaw`SELECT 1`;
       logger.log('Database connection verified ✓');
     } catch (error) {
-      logger.warn(`Database connection check failed: ${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error(`Database connection check failed: ${message}`);
+      throw error;
     }
   }
 
@@ -27,11 +33,9 @@ async function bootstrap() {
 
   const nodeEnv = process.env.NODE_ENV || 'development';
   
-  const defaultOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'https://web-production-13bf9.up.railway.app',
-  ];
+  const defaultOrigins = nodeEnv === 'production'
+    ? ['https://web-production-13bf9.up.railway.app']
+    : ['http://localhost:3000', 'http://localhost:3001'];
 
   const envOrigins = (process.env.FRONTEND_ORIGIN || process.env.FRONTEND_URL || process.env.CORS_ORIGIN || '')
     .split(',')
@@ -96,5 +100,3 @@ bootstrap().catch((err) => {
   console.error('Bootstrap error:', err);
   process.exit(1);
 });
-// Force restart Sunday 26 July 2026 01:23:45 PM IST
-// Restart 1785052806

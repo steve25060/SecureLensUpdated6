@@ -1,39 +1,41 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common';
-import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt.guard';
 import { WorkspacesService } from './workspaces.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 
 interface AuthRequest { user?: { id?: string; userId?: string; username?: string } }
 
 @Controller('workspaces')
-@UseGuards(OptionalJwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class WorkspacesController {
   constructor(private readonly workspacesService: WorkspacesService) {}
 
+  private userId(req: AuthRequest): string {
+    return req.user?.id || req.user?.userId || '';
+  }
+
   @Get()
   findAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.workspacesService.findAll(userId);
+    return this.workspacesService.findAll(this.userId(req));
   }
 
   @Post()
   create(@Req() req: AuthRequest, @Body() dto: CreateWorkspaceDto) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.workspacesService.create(userId, dto);
+    return this.workspacesService.create(this.userId(req), dto);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.workspacesService.findOne(id);
+  findOne(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.workspacesService.findOne(id, this.userId(req));
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: Partial<CreateWorkspaceDto>) {
-    return this.workspacesService.update(id, dto);
+  update(@Req() req: AuthRequest, @Param('id') id: string, @Body() dto: Partial<CreateWorkspaceDto>) {
+    return this.workspacesService.update(id, this.userId(req), dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.workspacesService.remove(id);
+  remove(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.workspacesService.remove(id, this.userId(req));
   }
 }

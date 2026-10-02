@@ -2,11 +2,15 @@ import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
-import { OAuthFallbackController } from './oauth-fallback.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { GithubStrategy } from './github.strategy';
 import { GoogleStrategy } from './google.strategy';
+
+const jwtSecret = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'securelens-dev-secret');
+if (!jwtSecret) {
+  throw new Error('JWT_SECRET is required in production');
+}
 
 @Global()
 @Module({
@@ -15,11 +19,11 @@ import { GoogleStrategy } from './google.strategy';
   imports: [
     PassportModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET || 'default_secret',
+      secret: jwtSecret,
       signOptions: { expiresIn: '1h' },
     }),
   ],
-  controllers: [AuthController, OAuthFallbackController],
+  controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GithubStrategy, GoogleStrategy],
   exports: [AuthService, JwtModule],
 })

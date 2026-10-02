@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -99,11 +99,11 @@ export class WorkspacesService {
 
   // ─── findOne ─────────────────────────────────────────────────────────────────
 
-  async findOne(id: string): Promise<WorkspaceRecord> {
+  async findOne(id: string, userId?: string): Promise<WorkspaceRecord> {
     if (this.prisma.connected) {
       try {
-        const ws = await this.prisma.workspace.findUnique({
-          where: { id },
+        const ws = await this.prisma.workspace.findFirst({
+          where: userId ? { id, userId } : { id },
           include: {
             scans: {
               select: {
@@ -130,7 +130,7 @@ export class WorkspacesService {
         this.logger.warn(`DB findOne failed (${err.message}) → file fallback`);
       }
     }
-    const rec = this.fileStore().find(w => w.id === id);
+    const rec = this.fileStore().find(w => w.id === id && (!userId || w.userId === userId));
     if (!rec) throw new NotFoundException(`Workspace not found: ${id}`);
     return rec;
   }
@@ -183,7 +183,8 @@ export class WorkspacesService {
 
   // ─── update ──────────────────────────────────────────────────────────────────
 
-  async update(id: string, dto: Partial<CreateWorkspaceDto>): Promise<WorkspaceRecord> {
+  async update(id: string, userId: string, dto: Partial<CreateWorkspaceDto>): Promise<WorkspaceRecord> {
+    await this.findOne(id, userId);
     if (this.prisma.connected) {
       try {
         const updated = await this.prisma.workspace.update({
@@ -203,7 +204,7 @@ export class WorkspacesService {
       }
     }
     const store = this.fileStore();
-    const idx = store.findIndex(w => w.id === id);
+    const idx = store.findIndex(w => w.id === id && w.userId === userId);
     if (idx === -1) throw new NotFoundException(`Workspace not found: ${id}`);
     store[idx] = { ...store[idx], ...dto, updatedAt: new Date().toISOString() } as WorkspaceRecord;
     this.writeFile(store);
@@ -212,7 +213,8 @@ export class WorkspacesService {
 
   // ─── remove ──────────────────────────────────────────────────────────────────
 
-  async remove(id: string): Promise<{ success: boolean }> {
+  async remove(id: string, userId: string): Promise<{ success: boolean }> {
+    await this.findOne(id, userId);
     if (this.prisma.connected) {
       try {
         await this.prisma.workspace.delete({ where: { id } });
@@ -222,7 +224,7 @@ export class WorkspacesService {
       }
     }
     const store = this.fileStore();
-    const idx = store.findIndex(w => w.id === id);
+    const idx = store.findIndex(w => w.id === id && w.userId === userId);
     if (idx === -1) throw new NotFoundException(`Workspace not found: ${id}`);
     store.splice(idx, 1);
     this.writeFile(store);
@@ -342,16 +344,18 @@ export class WorkspacesService {
     try {
       const existing = await this.prisma.user.findUnique({ where: { id: userId } });
       if (existing) return;
-      // Best-effort create. If it collides (race) we ignore and move on.
+      if (process.env.NODE_ENV === 'production') {
+        throw new UnauthorizedException('Authenticated user no longer exists');
+      }
       await this.prisma.user.create({
         data: {
           id: userId,
           email: `${userId}@securelens.local`,
-          name: userId === 'demo-user-1' ? 'Demo User' : userId,
+          name: userId,
           role: 'USER',
         },
       });
-      this.logger.log(`Ensured user row exists: ${userId}`);
+      this.logger.log(`Created development user row: ${userId}`);
     } catch (err: any) {
       // P2002 = unique violation → row already exists, which is fine.
       if (!String(err?.code).startsWith('P2002')) {

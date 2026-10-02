@@ -1,0 +1,15 @@
+.git
+.github
+**/node_modules
+**/.next
+**/dist
+**/.cache
+**/.turbo
+**/.securelens-data
+apps/frontend.backup
+backend-cloudflare
+scanner-images
+*.log
+.env
+.env.local
+.DS_Store

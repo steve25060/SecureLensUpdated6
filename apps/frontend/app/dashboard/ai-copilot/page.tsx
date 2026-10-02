@@ -219,9 +219,15 @@ function AICopilotContent() {
     const safeDbScans = Array.isArray(dbScans) ? dbScans.slice(0, 5) : [];
 
     try {
+      const authToken =
+        localStorage.getItem('access_token') || localStorage.getItem('sl_token');
+
       const response = await fetch('/api/ai-copilot/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({
           messages: [...messages, userMessage],
           message: input,

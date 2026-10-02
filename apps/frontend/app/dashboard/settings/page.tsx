@@ -229,6 +229,16 @@ const ACCENT_COLORS = [
   { name: 'Cyan', value: '#06b6d4' },
 ];
 
+function apiAuthHeaders(includeJson = false): Record<string, string> {
+  const token = typeof window !== 'undefined'
+    ? localStorage.getItem('access_token') || localStorage.getItem('sl_token')
+    : null;
+  return {
+    ...(includeJson ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 async function readJsonResponse(response: Response): Promise<any> {
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
@@ -502,7 +512,7 @@ function SettingsContent() {
       });
 
       // 4. Fetch backend AI status to see if server-side keys exist
-      fetch('/api/ai-copilot/status')
+      fetch('/api/ai-copilot/status', { headers: apiAuthHeaders() })
         .then(res => res.ok ? readJsonResponse(res) : null)
         .then(statusData => {
           if (statusData?.providers) {
@@ -564,7 +574,7 @@ function SettingsContent() {
       // 3. Push to backend AI controller
       await fetch('/api/ai-copilot/config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiAuthHeaders(true),
         body: JSON.stringify({
           primaryProvider: finalSettings.aiConfig.primaryProvider,
           failoverOrder: finalSettings.aiConfig.failoverOrder,
@@ -612,7 +622,7 @@ function SettingsContent() {
     try {
       const res = await fetch('/api/ai-copilot/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiAuthHeaders(true),
         body: JSON.stringify({
           provider: providerId,
           apiKey: prov.apiKey,
@@ -683,7 +693,7 @@ function SettingsContent() {
         try {
           const res = await fetch('/api/ai-copilot/test', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: apiAuthHeaders(true),
             body: JSON.stringify({
               provider: p,
               apiKey: providerState[p].apiKey,

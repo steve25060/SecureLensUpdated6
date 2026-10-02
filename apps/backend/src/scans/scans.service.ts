@@ -2,6 +2,8 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ScanExecutor, ExecutionLog } from './engines/scan-executor';
@@ -46,6 +48,99 @@ export class ScansService {
     private readonly notifications: NotificationsService,
     private readonly executor: ScanExecutor,
   ) {}
+
+  private isBlockedNetworkAddress(address: string): boolean {
+    const normalized = address.toLowerCase().replace(/^::ffff:/, '');
+    const version = isIP(normalized);
+
+    if (version === 4) {
+      const [a, b] = normalized.split('.').map(Number);
+      return (
+        a === 0 ||
+        a === 10 ||
+        a === 127 ||
+        (a === 100 && b >= 64 && b <= 127) ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) ||
+        (a === 198 && (b === 18 || b === 19)) ||
+        a >= 224
+      );
+    }
+
+    if (version === 6) {
+      return (
+        normalized === '::' ||
+        normalized === '::1' ||
+        normalized.startsWith('fc') ||
+        normalized.startsWith('fd') ||
+        /^fe[89ab]/.test(normalized)
+      );
+    }
+
+    return false;
+  }
+
+  private async validateTarget(mode: string, rawTarget: string): Promise<void> {
+    const target = (rawTarget || '').trim();
+    if (!target) throw new BadRequestException('target is required');
+
+    if (mode === 'github') {
+      let repoUrl: URL;
+      try {
+        repoUrl = new URL(target);
+      } catch {
+        throw new BadRequestException('GitHub target must be a valid URL');
+      }
+      const host = repoUrl.hostname.toLowerCase();
+      if (repoUrl.protocol !== 'https:' || !['github.com', 'www.github.com'].includes(host)) {
+        throw new BadRequestException('GitHub scans require an https://github.com/<owner>/<repo> URL');
+      }
+      const parts = repoUrl.pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '').split('/').filter(Boolean);
+      if (parts.length < 2) {
+        throw new BadRequestException('GitHub repository URL must include owner and repository');
+      }
+      return;
+    }
+
+    let url: URL;
+    try {
+      url = new URL(/^https?:\/\//i.test(target) ? target : `https://${target}`);
+    } catch {
+      throw new BadRequestException('Website target must be a valid HTTP or HTTPS URL');
+    }
+
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+      throw new BadRequestException('Only public HTTP/HTTPS targets without embedded credentials are allowed');
+    }
+
+    const hostname = url.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal')
+    ) {
+      throw new BadRequestException('Local or internal network targets are not allowed');
+    }
+
+    if (isIP(hostname)) {
+      if (this.isBlockedNetworkAddress(hostname)) {
+        throw new BadRequestException('Private, loopback, link-local, or reserved network targets are not allowed');
+      }
+      return;
+    }
+
+    try {
+      const resolved = await lookup(hostname, { all: true, verbatim: true });
+      if (resolved.length === 0 || resolved.some(record => this.isBlockedNetworkAddress(record.address))) {
+        throw new BadRequestException('Target resolves to a private or reserved network address');
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('Target hostname could not be resolved safely');
+    }
+  }
 
   // ─── engines ────────────────────────────────────────────────────────────────
 
@@ -106,10 +201,12 @@ export class ScansService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     if (this.prisma.connected) {
       try {
-        const scan = await this.prisma.scan.findUnique({ where: { id } });
+        const scan = userId
+          ? await this.prisma.scan.findFirst({ where: { id, userId } })
+          : await this.prisma.scan.findUnique({ where: { id } });
         if (scan) {
           let score = scan.riskScore;
           if (score === null || score === undefined || score === 0 || ((scan.findingsCount || 0) > 0 && scan.riskScore >= 98)) {
@@ -121,7 +218,7 @@ export class ScansService {
         this.logger.warn(`DB scan findOne failed (${err.message}) → file fallback`);
       }
     }
-    const rec = this.fileStore().find(s => s.id === id);
+    const rec = this.fileStore().find(s => s.id === id && (!userId || s.userId === userId));
     if (!rec) throw new NotFoundException(`Scan not found: ${id}`);
     let score = rec.riskScore;
     if (score === null || score === undefined || score === 0 || ((rec.findingsCount || 0) > 0 && score >= 98)) {
@@ -130,8 +227,8 @@ export class ScansService {
     return { ...rec, riskScore: score };
   }
 
-  async getScanStatus(scanId: string) {
-    const scan = await this.findOne(scanId) as any;
+  async getScanStatus(scanId: string, userId?: string) {
+    const scan = await this.findOne(scanId, userId) as any;
     return {
       scanId: scan.id,
       status: scan.status?.toLowerCase() ?? 'completed',
@@ -143,8 +240,8 @@ export class ScansService {
     };
   }
 
-  async getScanResults(scanId: string) {
-    const scan = await this.findOne(scanId) as any;
+  async getScanResults(scanId: string, userId?: string) {
+    const scan = await this.findOne(scanId, userId) as any;
     let riskScore = scan.riskScore;
     
     // Check if we have real findings in DB or template pool
@@ -180,18 +277,19 @@ export class ScansService {
     };
   }
 
-  async getLogs(scanId: string): Promise<ExecutionLog[]> {
+  async getLogs(scanId: string, userId?: string): Promise<ExecutionLog[]> {
+    await this.findOne(scanId, userId);
     const liveLogs = this.executor.getLogs(scanId);
     if (liveLogs.length > 0) return liveLogs;
     const rec = this.fileStore().find(s => s.id === scanId);
     return rec?._logs ?? [];
   }
 
-  async getWorkspaceScans(workspaceId: string) {
+  async getWorkspaceScans(workspaceId: string, userId?: string) {
     if (this.prisma.connected) {
       try {
         const rows = await this.prisma.scan.findMany({
-          where: { workspaceId },
+          where: userId ? { workspaceId, userId } : { workspaceId },
           orderBy: { createdAt: 'desc' },
           take: 30,
         });
@@ -206,7 +304,7 @@ export class ScansService {
         this.logger.warn(`DB workspace scans failed (${err.message}) → file fallback`);
       }
     }
-    return this.fileStore().filter(s => s.workspaceId === workspaceId).map(s => {
+    return this.fileStore().filter(s => s.workspaceId === workspaceId && (!userId || s.userId === userId)).map(s => {
       let score = s.riskScore;
       if (score === null || score === undefined || score === 0) {
         score = this.calculateDynamicScore(s.findingsCount || 0);
@@ -241,7 +339,7 @@ export class ScansService {
   async create(userId: string, data: { id?: string; workspaceId: string; mode?: string; target: string; engines: string[]; profile?: 'fast' | 'normal' | 'aggressive'; riskScore?: number; findingsCount?: number; status?: string }) {
     if (data.id) {
       try {
-        const existing = await this.findOne(data.id);
+        const existing = await this.findOne(data.id, userId);
         if (existing) {
           if (data.riskScore !== undefined || data.findingsCount !== undefined || data.status) {
             await this.setStatus(data.id, (data.status as any) || 'COMPLETED', {
@@ -256,6 +354,10 @@ export class ScansService {
     }
 
     const mode = (data.mode ?? 'website').toLowerCase();
+    if (!['website', 'github', 'combined'].includes(mode)) {
+      throw new BadRequestException('Invalid scan mode');
+    }
+    await this.validateTarget(mode, data.target);
     const validForMode = validEngineIdsForMode(mode);
     const engines = (data.engines ?? []).filter(e => isValidEngineId(e));
     const profile = data.profile ?? 'normal';
@@ -273,7 +375,7 @@ export class ScansService {
       try {
         await this.ensureUser(userId);
 
-        let ws = await this.prisma.workspace.findUnique({ where: { id: finalWorkspaceId } });
+        let ws = await this.prisma.workspace.findFirst({ where: { id: finalWorkspaceId, userId } });
         if (!ws) {
           const userWorkspaces = await this.prisma.workspace.findMany({ where: { userId } });
           if (userWorkspaces.length > 0) {
@@ -347,15 +449,16 @@ export class ScansService {
    * Starts (and, since there is no worker, immediately executes) a scan.
    * Execution runs asynchronously; progress is reflected via getScanStatus().
    */
-  async startScan(scanId: string) {
-    const scan = (await this.findOne(scanId)) as any;
+  async startScan(scanId: string, userId?: string) {
+    const scan = (await this.findOne(scanId, userId)) as any;
 
     // Mark RUNNING
     await this.setStatus(scanId, 'RUNNING', { progress: 0, startedAt: new Date() as any });
 
-    const userId = scan.userId;
+    const ownerUserId = scan.userId;
     const workspaceId = scan.workspaceId;
     const target = scan.target;
+    await this.validateTarget((scan.mode ?? 'website').toLowerCase(), target);
     const engines: string[] = scan.engines ?? [];
     const profile: 'fast' | 'normal' | 'aggressive' = scan.profile ?? 'normal';
 
@@ -376,7 +479,7 @@ export class ScansService {
           if (result.findingsCreated > 0) {
             const critical = result.findings.filter(f => f.severity === 'CRITICAL').length;
             await this.notifications.create({
-              userId,
+              userId: ownerUserId,
               title: 'Scan Completed',
               body: `Scan of ${target} found ${result.findingsCreated} finding${result.findingsCreated === 1 ? '' : 's'} (risk score ${result.riskScore}/100).`,
               type: critical > 0 ? 'error' : 'success',
@@ -385,7 +488,7 @@ export class ScansService {
             });
             if (critical > 0) {
               await this.notifications.create({
-                userId,
+                userId: ownerUserId,
                 title: `${critical} Critical Finding${critical === 1 ? '' : 's'}`,
                 body: `Scan of ${target} reported ${critical} critical-severity issue${critical === 1 ? '' : 's'}. Review immediately.`,
                 type: 'error',
@@ -395,7 +498,7 @@ export class ScansService {
             }
           } else {
             await this.notifications.create({
-              userId,
+              userId: ownerUserId,
               title: 'Scan Completed',
               body: `Scan of ${target} completed with no findings. Nice work!`,
               type: 'success',
@@ -411,7 +514,7 @@ export class ScansService {
         await this.setStatus(scanId, 'FAILED', { errorMessage: err.message });
         try {
           await this.notifications.create({
-            userId,
+            userId: ownerUserId,
             title: 'Scan Failed',
             body: `Scan of ${target} failed: ${err.message}`,
             type: 'error',
@@ -424,7 +527,8 @@ export class ScansService {
     return { id: scanId, status: 'RUNNING', message: 'Scan started' };
   }
 
-  async cancelScan(scanId: string) {
+  async cancelScan(scanId: string, userId?: string) {
+    await this.findOne(scanId, userId);
     return this.setStatus(scanId, 'CANCELLED');
   }
 
@@ -476,7 +580,8 @@ export class ScansService {
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId?: string) {
+    await this.findOne(id, userId);
     if (this.prisma.connected) {
       try {
         await this.prisma.scanLog.deleteMany({ where: { scanId: id } });
@@ -495,29 +600,42 @@ export class ScansService {
     return { success: true, id };
   }
 
-  async removeBulk(ids: string[]) {
+  async removeBulk(ids: string[], userId: string) {
+    const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
+    if (uniqueIds.length === 0) return { success: true, count: 0 };
+
+    let ownedIds = uniqueIds;
     if (this.prisma.connected) {
       try {
-        await this.prisma.scanLog.deleteMany({ where: { scanId: { in: ids } } });
-        await this.prisma.finding.deleteMany({ where: { scanId: { in: ids } } });
-        const res = await this.prisma.scan.deleteMany({ where: { id: { in: ids } } });
-        this.logger.log(`Deleted ${res.count} scans`);
+        const scans = await this.prisma.scan.findMany({
+          where: { id: { in: uniqueIds }, userId },
+          select: { id: true },
+        });
+        ownedIds = scans.map(scan => scan.id);
+        if (ownedIds.length > 0) {
+          await this.prisma.scanLog.deleteMany({ where: { scanId: { in: ownedIds } } });
+          await this.prisma.finding.deleteMany({ where: { scanId: { in: ownedIds } } });
+          await this.prisma.scan.deleteMany({ where: { id: { in: ownedIds }, userId } });
+        }
       } catch (err: any) {
         this.logger.warn(`DB scan bulk delete failed (${err.message})`);
+        throw err;
       }
     }
+
+    const ownedSet = new Set(ownedIds);
     const store = this.fileStore();
-    const idSet = new Set(ids);
-    const filtered = store.filter(s => !idSet.has(s.id));
-    this.writeFile(filtered);
-    return { success: true, count: ids.length };
+    const filtered = store.filter(s => !(s.userId === userId && ownedSet.has(s.id)));
+    if (filtered.length !== store.length) this.writeFile(filtered);
+    return { success: true, count: ownedIds.length };
   }
 
-  async removeByTarget(target: string) {
+  async removeByTarget(target: string, userId: string) {
     if (this.prisma.connected) {
       try {
         const scans = await this.prisma.scan.findMany({
           where: {
+            userId,
             OR: [
               { target: { contains: target, mode: 'insensitive' } },
               { targetUrl: { contains: target, mode: 'insensitive' } },
@@ -529,15 +647,18 @@ export class ScansService {
         if (ids.length > 0) {
           await this.prisma.scanLog.deleteMany({ where: { scanId: { in: ids } } });
           await this.prisma.finding.deleteMany({ where: { scanId: { in: ids } } });
-          await this.prisma.scan.deleteMany({ where: { id: { in: ids } } });
+          await this.prisma.scan.deleteMany({ where: { id: { in: ids }, userId } });
         }
       } catch (err: any) {
         this.logger.warn(`DB scan target delete failed (${err.message})`);
+        throw err;
       }
     }
     const store = this.fileStore();
-    const filtered = store.filter(s => !s.target.toLowerCase().includes(target.toLowerCase()));
-    this.writeFile(filtered);
+    const filtered = store.filter(
+      s => !(s.userId === userId && s.target.toLowerCase().includes(target.toLowerCase())),
+    );
+    if (filtered.length !== store.length) this.writeFile(filtered);
     return { success: true, target };
   }
 
@@ -558,7 +679,9 @@ export class ScansService {
         this.logger.warn(`DB scan all delete failed (${err.message})`);
       }
     }
-    this.writeFile([]);
+    const store = this.fileStore();
+    const filtered = store.filter(s => s.userId !== userId);
+    if (filtered.length !== store.length) this.writeFile(filtered);
     return { success: true };
   }
 

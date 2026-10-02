@@ -30,7 +30,12 @@ export class QueueService {
 
   private initializeQueues() {
     try {
-      const redisUrl = this.configService.get<string>('REDIS_URL', 'redis://localhost:6380');
+      const redisUrl = this.configService.get<string>('REDIS_URL');
+      if (!redisUrl) {
+        this.ready = false;
+        this.logger.log('REDIS_URL is not configured — optional Bull queues are disabled');
+        return;
+      }
 
       this.scanQueue = new Queue('scans', redisUrl);
       this.parserQueue = new Queue('parser', redisUrl);
