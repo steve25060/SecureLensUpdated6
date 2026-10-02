@@ -37,6 +37,7 @@ jobs:
           context: .
           file: ./Dockerfile.frontend
           push: false
+          load: true
           tags: securelens-frontend:ci
           build-args: |
             BACKEND_URL=https://web-production-e3c1e.up.railway.app
@@ -44,9 +45,34 @@ jobs:
             NEXT_PUBLIC_API_URL=/api
             NEXT_PUBLIC_APP_URL=https://web-production-13bf9.up.railway.app
             NEXT_PUBLIC_ENABLE_DEMO_AUTH=false
+      - name: Smoke test Next.js runtime
+        run: |
+          docker run -d --name securelens-frontend-ci --network host -e PORT=3000 securelens-frontend:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs securelens-frontend-ci
+          exit 1
 
   backend-image:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: securelens
+          POSTGRES_PASSWORD: securelens
+          POSTGRES_DB: securelens
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U securelens"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -56,4 +82,29 @@ jobs:
           context: .
           file: ./Dockerfile.backend
           push: false
+          load: true
           tags: securelens-backend:ci
+      - name: Verify scanner runtime
+        run: |
+          docker run --rm --entrypoint sh securelens-backend:ci -lc '
+            command -v dnsx &&
+            command -v subfinder &&
+            command -v httpx &&
+            command -v whatweb &&
+            command -v testssl &&
+            command -v katana &&
+            command -v nmap &&
+            command -v nuclei &&
+            command -v git
+          '
+      - name: Smoke test NestJS runtime and migrations
+        run: |
+          docker run -d --name securelens-backend-ci --network host             -e PORT=4000             -e NODE_ENV=production             -e JWT_SECRET=ci-only-securelens-jwt-secret-0123456789             -e DATABASE_URL=postgresql://securelens:securelens@127.0.0.1:5432/securelens             -e FRONTEND_URL=http://127.0.0.1:3000             -e FRONTEND_ORIGIN=http://127.0.0.1:3000             securelens-backend:ci
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:4000/health | grep -q '"status":"operational"'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs securelens-backend-ci
+          exit 1
