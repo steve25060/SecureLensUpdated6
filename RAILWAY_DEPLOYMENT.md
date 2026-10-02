@@ -57,7 +57,7 @@ REDIS_URL=
 
 Redis is not required for the current in-process live scan flow. When `REDIS_URL` is absent, the optional Bull queues stay disabled instead of connecting to localhost.
 
-The backend Docker image runs `prisma migrate deploy` before starting NestJS. A failed migration prevents the service from starting instead of silently running against an outdated schema.
+The backend Docker image runs the production migration bootstrap before starting NestJS. Fresh databases use `prisma migrate deploy`; legacy Railway databases created by the old `prisma db push` startup are baselined without `--accept-data-loss`, then pending cleanup migrations are applied. Any migration failure stops backend startup.
 
 The backend listens on Railway's injected `PORT` value. Do not hardcode a Railway port.
 
