@@ -13,12 +13,12 @@ import { AICopilotService, AIProvider, ChatMessage } from './ai-copilot.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { UnifiedFinding } from '@securelens/findings-schema';
 
-@Controller(['ai-copilot', 'ai'])
-@UseGuards(JwtAuthGuard)
 interface AIAuthRequest {
   user?: { id?: string; userId?: string };
 }
 
+@Controller(['ai-copilot', 'ai'])
+@UseGuards(JwtAuthGuard)
 export class AICopilotController {
   constructor(
     private aiCopilot: AICopilotService,
