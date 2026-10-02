@@ -4,38 +4,32 @@ on:
   push:
     paths:
       - 'apps/backend/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/backend.yml'
   pull_request:
     paths:
       - 'apps/backend/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/backend.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: securelens
-          POSTGRES_PASSWORD: securelens
-          POSTGRES_DB: securelens
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U $POSTGRES_USER"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
       - name: Install pnpm
-        run: npm i -g pnpm
-      - name: Install dependencies
-        run: pnpm install --filter ./apps/backend...
-      - name: Lint
-        run: pnpm --filter ./apps/backend... lint
-      - name: Build
-        run: pnpm --filter ./apps/backend... build
+        run: npm install -g pnpm@10
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build backend
+        run: pnpm build:backend
