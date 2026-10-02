@@ -73,4 +73,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=5 \
 EXPOSE 3000
 
 # Migrations are idempotent and run before NestJS starts.
-CMD ["sh", "-c", "cd /app/apps/backend && pnpm run prisma:deploy && exec node dist/main.js"]
+CMD ["sh", "-c", "cd /app/apps/backend && sh scripts/migrate-production.sh && exec node dist/main.js"]
