@@ -4,19 +4,15 @@ import { ScansService } from './scans.service';
 
 interface AuthRequest { user?: { id?: string; userId?: string } }
 
-/**
- * Scan endpoints. Engine listing is PUBLIC (the live-scan page loads engines
- * before the user is fully authenticated); create/start require valid user or demo session.
- *
- * Engine names returned here are the friendly ones ("Port Scanner", etc.)
- * defined in engines/catalog.ts.
- */
 @Controller('scans')
 export class ScansController {
   constructor(private readonly scansService: ScansService) {}
 
-  // ===== PUBLIC (no auth) =====
+  private userId(req: AuthRequest): string {
+    return req.user?.id || req.user?.userId || '';
+  }
 
+  // Public engine metadata.
   @Get('engines/mode/:mode')
   getEnginesForMode(@Param('mode') mode: string) {
     return this.scansService.getEnginesForMode(mode);
@@ -32,93 +28,88 @@ export class ScansController {
     return this.scansService.getConstants();
   }
 
-  // ===== AUTHENTICATED LIVE SCAN =====
-
+  // Put static authenticated routes before :id routes.
   @Get('stats')
   @UseGuards(JwtAuthGuard)
   getStats(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.getStats(userId);
+    return this.scansService.getStats(this.userId(req));
   }
 
   @Get('workspace/:workspaceId')
   @UseGuards(JwtAuthGuard)
-  getWorkspaceScans(@Param('workspaceId') workspaceId: string) {
-    return this.scansService.getWorkspaceScans(workspaceId);
+  getWorkspaceScans(@Req() req: AuthRequest, @Param('workspaceId') workspaceId: string) {
+    return this.scansService.getWorkspaceScans(workspaceId, this.userId(req));
   }
 
   @Get(':id/status')
   @UseGuards(JwtAuthGuard)
-  getScanStatus(@Param('id') id: string) {
-    return this.scansService.getScanStatus(id);
+  getScanStatus(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.getScanStatus(id, this.userId(req));
   }
 
   @Get(':id/results')
   @UseGuards(JwtAuthGuard)
-  getScanResults(@Param('id') id: string) {
-    return this.scansService.getScanResults(id);
+  getScanResults(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.getScanResults(id, this.userId(req));
   }
 
   @Get(':id/logs')
   @UseGuards(JwtAuthGuard)
-  getLogs(@Param('id') id: string) {
-    return this.scansService.getLogs(id);
+  getLogs(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.getLogs(id, this.userId(req));
   }
 
   @Get(':id')
   @UseGuards(JwtAuthGuard)
-  findOne(@Param('id') id: string) {
-    return this.scansService.findOne(id);
-  }
-
-  @Post('create')
-  @UseGuards(JwtAuthGuard)
-  create(@Req() req: AuthRequest, @Body() body: any) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.create(userId, body);
-  }
-
-  @Post(':id/start')
-  @UseGuards(JwtAuthGuard)
-  startScan(@Param('id') id: string) {
-    return this.scansService.startScan(id);
-  }
-
-  @Delete(':id/cancel')
-  @UseGuards(JwtAuthGuard)
-  cancelScan(@Param('id') id: string) {
-    return this.scansService.cancelScan(id);
-  }
-
-  @Delete('bulk')
-  @UseGuards(JwtAuthGuard)
-  removeBulk(@Body() body: { ids: string[] }) {
-    return this.scansService.removeBulk(body?.ids || []);
-  }
-
-  @Delete('target/:target')
-  @UseGuards(JwtAuthGuard)
-  removeByTarget(@Param('target') target: string) {
-    return this.scansService.removeByTarget(decodeURIComponent(target));
-  }
-
-  @Delete('all')
-  @UseGuards(JwtAuthGuard)
-  removeAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.removeAll(userId);
-  }
-
-  @Delete(':id')
-  @UseGuards(JwtAuthGuard)
-  remove(@Param('id') id: string) {
-    return this.scansService.remove(id);
+  findOne(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.findOne(id, this.userId(req));
   }
 
   @Get()
   @UseGuards(JwtAuthGuard)
   findAll(@Req() req: AuthRequest) {
-    const userId = req.user?.id || req.user?.userId || '';
-    return this.scansService.findAll(userId);
+    return this.scansService.findAll(this.userId(req));
+  }
+
+  @Post('create')
+  @UseGuards(JwtAuthGuard)
+  create(@Req() req: AuthRequest, @Body() body: any) {
+    return this.scansService.create(this.userId(req), body);
+  }
+
+  @Post(':id/start')
+  @UseGuards(JwtAuthGuard)
+  startScan(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.startScan(id, this.userId(req));
+  }
+
+  @Delete('bulk')
+  @UseGuards(JwtAuthGuard)
+  removeBulk(@Req() req: AuthRequest, @Body() body: { ids: string[] }) {
+    return this.scansService.removeBulk(body?.ids || [], this.userId(req));
+  }
+
+  @Delete('target/:target')
+  @UseGuards(JwtAuthGuard)
+  removeByTarget(@Req() req: AuthRequest, @Param('target') target: string) {
+    return this.scansService.removeByTarget(decodeURIComponent(target), this.userId(req));
+  }
+
+  @Delete('all')
+  @UseGuards(JwtAuthGuard)
+  removeAll(@Req() req: AuthRequest) {
+    return this.scansService.removeAll(this.userId(req));
+  }
+
+  @Delete(':id/cancel')
+  @UseGuards(JwtAuthGuard)
+  cancelScan(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.cancelScan(id, this.userId(req));
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  remove(@Req() req: AuthRequest, @Param('id') id: string) {
+    return this.scansService.remove(id, this.userId(req));
   }
 }
