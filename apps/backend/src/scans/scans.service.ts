@@ -2,6 +2,8 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ScanExecutor, ExecutionLog } from './engines/scan-executor';
@@ -46,6 +48,99 @@ export class ScansService {
     private readonly notifications: NotificationsService,
     private readonly executor: ScanExecutor,
   ) {}
+
+  private isBlockedNetworkAddress(address: string): boolean {
+    const normalized = address.toLowerCase().replace(/^::ffff:/, '');
+    const version = isIP(normalized);
+
+    if (version === 4) {
+      const [a, b] = normalized.split('.').map(Number);
+      return (
+        a === 0 ||
+        a === 10 ||
+        a === 127 ||
+        (a === 100 && b >= 64 && b <= 127) ||
+        (a === 169 && b === 254) ||
+        (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168) ||
+        (a === 198 && (b === 18 || b === 19)) ||
+        a >= 224
+      );
+    }
+
+    if (version === 6) {
+      return (
+        normalized === '::' ||
+        normalized === '::1' ||
+        normalized.startsWith('fc') ||
+        normalized.startsWith('fd') ||
+        /^fe[89ab]/.test(normalized)
+      );
+    }
+
+    return false;
+  }
+
+  private async validateTarget(mode: string, rawTarget: string): Promise<void> {
+    const target = (rawTarget || '').trim();
+    if (!target) throw new BadRequestException('target is required');
+
+    if (mode === 'github') {
+      let repoUrl: URL;
+      try {
+        repoUrl = new URL(target);
+      } catch {
+        throw new BadRequestException('GitHub target must be a valid URL');
+      }
+      const host = repoUrl.hostname.toLowerCase();
+      if (repoUrl.protocol !== 'https:' || !['github.com', 'www.github.com'].includes(host)) {
+        throw new BadRequestException('GitHub scans require an https://github.com/<owner>/<repo> URL');
+      }
+      const parts = repoUrl.pathname.replace(/^\/+|\/+$/g, '').replace(/\.git$/i, '').split('/').filter(Boolean);
+      if (parts.length < 2) {
+        throw new BadRequestException('GitHub repository URL must include owner and repository');
+      }
+      return;
+    }
+
+    let url: URL;
+    try {
+      url = new URL(/^https?:\/\//i.test(target) ? target : `https://${target}`);
+    } catch {
+      throw new BadRequestException('Website target must be a valid HTTP or HTTPS URL');
+    }
+
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+      throw new BadRequestException('Only public HTTP/HTTPS targets without embedded credentials are allowed');
+    }
+
+    const hostname = url.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname.endsWith('.localhost') ||
+      hostname.endsWith('.local') ||
+      hostname.endsWith('.internal')
+    ) {
+      throw new BadRequestException('Local or internal network targets are not allowed');
+    }
+
+    if (isIP(hostname)) {
+      if (this.isBlockedNetworkAddress(hostname)) {
+        throw new BadRequestException('Private, loopback, link-local, or reserved network targets are not allowed');
+      }
+      return;
+    }
+
+    try {
+      const resolved = await lookup(hostname, { all: true, verbatim: true });
+      if (resolved.length === 0 || resolved.some(record => this.isBlockedNetworkAddress(record.address))) {
+        throw new BadRequestException('Target resolves to a private or reserved network address');
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('Target hostname could not be resolved safely');
+    }
+  }
 
   // ─── engines ────────────────────────────────────────────────────────────────
 
@@ -259,6 +354,10 @@ export class ScansService {
     }
 
     const mode = (data.mode ?? 'website').toLowerCase();
+    if (!['website', 'github', 'combined'].includes(mode)) {
+      throw new BadRequestException('Invalid scan mode');
+    }
+    await this.validateTarget(mode, data.target);
     const validForMode = validEngineIdsForMode(mode);
     const engines = (data.engines ?? []).filter(e => isValidEngineId(e));
     const profile = data.profile ?? 'normal';
@@ -359,6 +458,7 @@ export class ScansService {
     const ownerUserId = scan.userId;
     const workspaceId = scan.workspaceId;
     const target = scan.target;
+    await this.validateTarget((scan.mode ?? 'website').toLowerCase(), target);
     const engines: string[] = scan.engines ?? [];
     const profile: 'fast' | 'normal' | 'aggressive' = scan.profile ?? 'normal';
 
