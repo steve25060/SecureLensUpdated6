@@ -234,11 +234,17 @@ export class AuthService {
     );
   }
 
-  /** Seed the demo user into Postgres so FKs on workspaces/scans succeed. */
+  /** Seed the demo user only when demo authentication is explicitly available. */
   async ensureDemoUser() {
-    // If database is not connected, return ephemeral demo user
+    if (!this.isDemoAuthEnabled()) {
+      throw new UnauthorizedException('Demo authentication is disabled');
+    }
+
     if (!this.prisma.connected) {
-      this.logger.warn('Database not connected - returning ephemeral demo user');
+      if (process.env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableException('Database is unavailable');
+      }
+      this.logger.warn('Database not connected - returning development-only demo user');
       return {
         id: DEMO_USER_ID,
         email: DEMO_EMAIL,
@@ -334,11 +340,14 @@ export class AuthService {
         this.logger.warn(`Failed to update user profile in DB: ${err.message}`);
       }
     }
+    if (process.env.NODE_ENV === 'production') {
+      throw new ServiceUnavailableException('Database is unavailable');
+    }
     return {
       id: userId,
-      name: data.name || 'Stavan Shah',
-      email: data.email || 'stavan@example.com',
-      organization: data.organization || 'Acme Security',
+      name: data.name || 'Development User',
+      email: data.email || 'dev@securelens.local',
+      organization: data.organization || 'Local Development',
       role: 'USER',
     };
   }
