@@ -2,7 +2,6 @@ import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
-import { OAuthFallbackController } from './oauth-fallback.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { GithubStrategy } from './github.strategy';
@@ -24,7 +23,7 @@ if (!jwtSecret) {
       signOptions: { expiresIn: '1h' },
     }),
   ],
-  controllers: [AuthController, OAuthFallbackController],
+  controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GithubStrategy, GoogleStrategy],
   exports: [AuthService, JwtModule],
 })
