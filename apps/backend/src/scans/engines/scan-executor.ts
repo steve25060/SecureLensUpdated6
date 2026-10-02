@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { Severity } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { engineById } from './catalog';
-import { pickFindingsForEngine } from './finding-templates';
 import ScanOrchestrator from './scan-orchestrator';
 import NormalizationLayer from './normalization-layer';
 import CorrelationEngine from './correlation-engine';
@@ -106,68 +105,6 @@ export class ScanExecutor {
       // Normalize and store findings
       let correlatedFindings = orchestrationResult.correlatedFindings || [];
       
-      // Fallback: if live CLI execution produced 0 findings (e.g. target blocked scanner or timed out),
-      // generate findings from engine templates so findings are never empty
-      if (correlatedFindings.length === 0) {
-        const ENGINE_KEY_MAP: Record<string, string> = {
-          dnsx: 'dns_check',
-          dns_check: 'dns_check',
-          subfinder: 'subdomain_discovery',
-          subdomain_discovery: 'subdomain_discovery',
-          httpx: 'asset_discovery',
-          asset_discovery: 'asset_discovery',
-          whatweb: 'tech_detection',
-          tech_detection: 'tech_detection',
-          http_security: 'http_security',
-          testssl: 'ssl_tls_analysis',
-          ssl_tls_analysis: 'ssl_tls_analysis',
-          waf_detection: 'waf_detection',
-          email_security: 'email_security',
-          api_security: 'api_security',
-          endpoint_discovery: 'endpoint_discovery',
-          privacy_compliance: 'privacy_compliance',
-          katana: 'endpoint_discovery',
-          nmap: 'network_exposure',
-          network_exposure: 'network_exposure',
-          nuclei: 'vulnerability_detection',
-          vulnerability_detection: 'vulnerability_detection',
-          security_intelligence: 'security_intelligence',
-          secret_finder: 'secret_detection',
-          secret_detection: 'secret_detection',
-          code_scanner: 'code_security',
-          code_security: 'code_security',
-          container_checker: 'container_security',
-          container_security: 'container_security',
-          dependency_analysis: 'dependency_analysis',
-          infrastructure_security: 'infrastructure_security',
-          cicd_security: 'cicd_security',
-          license_compliance: 'license_compliance',
-          repository_overview: 'repository_overview',
-        };
-
-        const templateFindings: any[] = [];
-        for (const eng of engineIds) {
-          const key = ENGINE_KEY_MAP[eng] || eng;
-          const picked = pickFindingsForEngine(key, target, profile || 'normal');
-          for (const item of picked) {
-            templateFindings.push({
-              title: item.title,
-              description: item.description,
-              severity: item.severity,
-              category: item.category || 'General',
-              cwe: item.cwe || null,
-              cvss: item.cvss || null,
-              owasp: item.owasp || null,
-              remediation: item.remediation || '',
-              sources: [{ tool: eng, engineId: eng }],
-            });
-          }
-        }
-        if (templateFindings.length > 0) {
-          correlatedFindings = CorrelationEngine.processFindings(templateFindings as any);
-        }
-      }
-
       if (this.prisma.connected) {
         let validWorkspaceId = workspaceId;
         try {
@@ -328,8 +265,7 @@ export class ScanExecutor {
         }).catch(() => void 0);
       }
 
-      const fallbackScore = createdFindings.length > 0 ? this.computeRiskScore(createdFindings.map(f => f.severity)) : 75;
-      return { findingsCreated: createdFindings.length, riskScore: fallbackScore, logs, findings: createdFindings };
+      throw err;
     }
   }
 
