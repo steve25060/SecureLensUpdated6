@@ -25,6 +25,10 @@ on:
       - 'pnpm-workspace.yaml'
       - '.github/workflows/railway-docker-readiness.yml'
 
+concurrency:
+  group: railway-docker-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend-image:
     runs-on: ubuntu-latest
