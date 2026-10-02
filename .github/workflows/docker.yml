@@ -1,11 +1,7 @@
 name: Docker Build & Push
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'docker/**'
-      - 'apps/**'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -22,18 +18,14 @@ jobs:
       - name: Build and push frontend image
         uses: docker/build-push-action@v5
         with:
-          context: ./apps/frontend
+          context: .
+          file: ./Dockerfile.frontend
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/securelens-frontend:latest
       - name: Build and push backend image
         uses: docker/build-push-action@v5
         with:
-          context: ./apps/backend
+          context: .
+          file: ./Dockerfile.backend
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/securelens-backend:latest
-      - name: Build and push worker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./apps/worker
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/securelens-worker:latest
