@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { join } from 'node:path';
 
 /**
  * Advanced Engine Commands for SecureLens Security Pipeline
@@ -347,63 +348,63 @@ const parseGitHubScannerOutput = (output: string): FindingTemplate[] => {
 
 const repository_overview_command: EngineCommandConfig = {
   description: 'Detect languages, frameworks, package managers, and structure',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"',
   timeout: 45,
   parser: parseGitHubScannerOutput,
 };
 
 const code_security_command: EngineCommandConfig = {
   description: 'Code Security Check (Semgrep OSS - Static Application Security Testing)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
   timeout: 60,
   parser: parseGitHubScannerOutput,
 };
 
 const secret_detection_command: EngineCommandConfig = {
   description: 'Secret Detection (Gitleaks - Exposed API Keys, Tokens & Passwords)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"',
   timeout: 45,
   parser: parseGitHubScannerOutput,
 };
 
 const dependency_analysis_command: EngineCommandConfig = {
   description: 'Dependency Security Check (Trivy - Vulnerable Package & Supply Chain Flaws)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"',
   timeout: 60,
   parser: parseGitHubScannerOutput,
 };
 
 const infrastructure_security_command: EngineCommandConfig = {
   description: 'Infrastructure Security Check (Checkov - Terraform, Kubernetes & IaC Misconfigurations)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
   timeout: 60,
   parser: parseGitHubScannerOutput,
 };
 
 const cicd_security_command: EngineCommandConfig = {
   description: 'CI/CD & Pipeline Security Check (GitHub Actions Workflow Auditor)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
   timeout: 45,
   parser: parseGitHubScannerOutput,
 };
 
 const license_compliance_command: EngineCommandConfig = {
   description: 'License Compliance & Legal Risk Check (Open-Source License & Legal Compliance)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"',
   timeout: 30,
   parser: parseGitHubScannerOutput,
 };
 
 const container_security_command: EngineCommandConfig = {
   description: 'Container & Dockerfile Security Check (Base Images, Root Execution & Container Hardening)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
+  cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"',
   timeout: 45,
   parser: parseGitHubScannerOutput,
 };
 
 const http_security_command: EngineCommandConfig = {
   description: 'Deep HTTP security headers, cookies, and CORS audit',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
   timeout: 30,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -431,7 +432,7 @@ const http_security_command: EngineCommandConfig = {
 
 const api_security_command: EngineCommandConfig = {
   description: 'API Security & GraphQL Auditor (OpenAPI/Swagger docs & GraphQL introspection)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
   timeout: 30,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -460,7 +461,7 @@ const api_security_command: EngineCommandConfig = {
 
 const waf_detection_command: EngineCommandConfig = {
   description: 'WAF & Perimeter Defense (Cloudflare, AWS WAF, Akamai & Origin Protection)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
   timeout: 20,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -489,7 +490,7 @@ const waf_detection_command: EngineCommandConfig = {
 
 const email_security_command: EngineCommandConfig = {
   description: 'Email Security & Anti-Spoofing Check (DMARC, SPF, and MX Validation)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
   timeout: 25,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -518,7 +519,7 @@ const email_security_command: EngineCommandConfig = {
 
 const privacy_compliance_command: EngineCommandConfig = {
   description: 'Privacy & Cookie Compliance Check (Trackers, PII, and Mixed Content)',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
   timeout: 25,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -547,7 +548,7 @@ const privacy_compliance_command: EngineCommandConfig = {
 
 const security_intelligence_command: EngineCommandConfig = {
   description: 'Correlate attack surface data, CVSS prioritization & threat intelligence',
-  cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"',
   timeout: 20,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -714,59 +715,59 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 20 -dast -severity critical,high,medium,low -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,http/cves,network,ssl 2>/dev/null || echo ""', timeout: 240 },
   },
   repository_overview: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 20 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "repository_overview" --deep --ast-full 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 90 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 20 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" --deep --ast-full 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 90 },
   },
   code_security: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "code_security" --deep --ast-full --all-rules 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" --deep --ast-full --all-rules 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
   },
   secret_detection: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "secret_detection" --deep --all-commits --history 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" --deep --all-commits --history 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
   },
   dependency_analysis: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
   },
   infrastructure_security: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "infrastructure_security" --deep --checkov-full 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "infrastructure_security" --deep --checkov-full 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
   },
   cicd_security: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "cicd_security" --deep --actions-audit 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "cicd_security" --deep --actions-audit 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
   },
   license_compliance: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 20 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "license_compliance" --deep --gpl-audit 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 90 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 20 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "license_compliance" --deep --gpl-audit 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 90 },
   },
   container_security: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "container_security" --deep --docker-cis 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "container_security" --deep --docker-cis 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
   },
   secret_finder: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "secret_detection" --deep --all-commits --history 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 25 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 45 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "secret_detection" --deep --all-commits --history 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 120 },
   },
   code_scanner: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "code_security" --deep --ast-full --all-rules 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "code_security" --deep --ast-full --all-rules 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
   },
   container_checker: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 30 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 60 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
   },
   vulnerability_scanner: {
     fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures 2>/dev/null || echo ""', timeout: 30 },
@@ -794,34 +795,34 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     aggressive: { cmd: 'timeout 180 testssl --quiet --full --vulnerable --sneaky --warnings batch <TARGET> 2>/dev/null || echo ""', timeout: 190 },
   },
   http_security: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 30 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/http-security-audit.js "<TARGET>" --deep --fuzz-cors --check-all-headers 2>/dev/null || echo "[]"', timeout: 60 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 30 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" --deep --fuzz-cors --check-all-headers 2>/dev/null || echo "[]"', timeout: 60 },
   },
   api_security: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 30 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/api-security-audit.js "<TARGET>" --deep --swagger-discovery --graphql-probe --jwt-fuzz 2>/dev/null || echo "[]"', timeout: 60 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 30 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" --deep --swagger-discovery --graphql-probe --jwt-fuzz 2>/dev/null || echo "[]"', timeout: 60 },
   },
   waf_detection: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 20 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/waf-security-audit.js "<TARGET>" --deep --bypass-analysis --cloud-fingerprint 2>/dev/null || echo "[]"', timeout: 45 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 20 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" --deep --bypass-analysis --cloud-fingerprint 2>/dev/null || echo "[]"', timeout: 45 },
   },
   email_security: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 25 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/email-security-audit.js "<TARGET>" --deep --spf --dkim --dmarc --bimi --mta-sts 2>/dev/null || echo "[]"', timeout: 50 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 25 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" --deep --spf --dkim --dmarc --bimi --mta-sts 2>/dev/null || echo "[]"', timeout: 50 },
   },
   privacy_compliance: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 25 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/privacy-security-audit.js "<TARGET>" --deep --gdpr --ccpa --cookie-inventory --third-party-trackers 2>/dev/null || echo "[]"', timeout: 50 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 25 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" --deep --gdpr --ccpa --cookie-inventory --third-party-trackers 2>/dev/null || echo "[]"', timeout: 50 },
   },
   security_intelligence: {
-    fast: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 20 },
-    aggressive: { cmd: 'node /home/stavan/SecureLensUpdated1/apps/backend/scripts/security-intelligence.js "<TARGET>" --deep --threat-correlation --cve-intel 2>/dev/null || echo "[]"', timeout: 45 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 20 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" --deep --threat-correlation --cve-intel 2>/dev/null || echo "[]"', timeout: 45 },
   },
 };
 
@@ -839,8 +840,24 @@ function isOutdatedVersion(plugin: string, version: string): boolean {
   return pattern ? pattern.test(version) : false;
 }
 
+function resolveScriptsDir(): string {
+  const cwd = process.cwd();
+  const backendDir = cwd.endsWith(join('apps', 'backend'))
+    ? cwd
+    : join(cwd, 'apps', 'backend');
+  return (process.env.SECURELENS_SCRIPTS_DIR || join(backendDir, 'scripts')).replace(/\\/g, '/');
+}
+
+function resolveCommand(config: EngineCommandConfig): EngineCommandConfig {
+  return {
+    ...config,
+    cmd: config.cmd.replace(/<SCRIPTS_DIR>/g, resolveScriptsDir()),
+  };
+}
+
 export function getEngineCommand(engineId: string): EngineCommandConfig | undefined {
-  return ADVANCED_ENGINE_COMMANDS[engineId.toLowerCase()];
+  const config = ADVANCED_ENGINE_COMMANDS[engineId.toLowerCase()];
+  return config ? resolveCommand(config) : undefined;
 }
 
 export function getEngineCommandForProfile(
@@ -853,13 +870,13 @@ export function getEngineCommandForProfile(
   const profConfig = ENGINE_PROFILE_COMMANDS[engineId.toLowerCase()]?.[profile]
     || ENGINE_PROFILE_COMMANDS[engineId.toLowerCase()]?.normal;
 
-  if (!profConfig) return base;
+  if (!profConfig) return resolveCommand(base);
 
-  return {
+  return resolveCommand({
     ...base,
     cmd: profConfig.cmd,
     timeout: profConfig.timeout,
-  };
+  });
 }
 
 export function getAllEngineIds(): string[] {
