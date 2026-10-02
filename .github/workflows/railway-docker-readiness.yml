@@ -1,0 +1,59 @@
+name: Railway Docker Readiness
+
+on:
+  push:
+    branches: [main, chatgpt/railway-readiness-final]
+    paths:
+      - 'Dockerfile.backend'
+      - 'Dockerfile.frontend'
+      - 'apps/backend/**'
+      - 'apps/frontend/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/railway-docker-readiness.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile.backend'
+      - 'Dockerfile.frontend'
+      - 'apps/backend/**'
+      - 'apps/frontend/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/railway-docker-readiness.yml'
+
+jobs:
+  frontend-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build frontend Railway image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: false
+          tags: securelens-frontend:ci
+          build-args: |
+            BACKEND_URL=https://web-production-e3c1e.up.railway.app
+            NEXT_PUBLIC_BACKEND_URL=https://web-production-e3c1e.up.railway.app
+            NEXT_PUBLIC_API_URL=/api
+            NEXT_PUBLIC_APP_URL=https://web-production-13bf9.up.railway.app
+            NEXT_PUBLIC_ENABLE_DEMO_AUTH=false
+
+  backend-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build backend Railway image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: false
+          tags: securelens-backend:ci
