@@ -64,7 +64,7 @@ export class HealthController {
       uptimeSeconds: Math.floor(uptimeSec),
       uptimeFormatted: this.formatUptime(uptimeSec),
       environment: process.env.NODE_ENV || 'production',
-      platform: 'Render Cloud (Linux x64)',
+      platform: 'Railway Cloud (Linux x64)',
       engines: [
         { name: 'DNS Resolution & Hygiene', id: 'dns_check', type: 'DAST/Recon', status: 'ready' },
         { name: 'Subdomain Enumeration', id: 'subdomain_discovery', type: 'DAST/Surface', status: 'ready' },
@@ -91,9 +91,9 @@ export class HealthController {
       ],
       aiCopilot: {
         status: 'active',
-        providers: ['Google Gemini', 'OpenRouter', 'Groq', 'OpenAI', 'Claude', 'Ollama'],
+        providers: ['Google Gemini', 'OpenRouter', 'Groq', 'OpenAI', 'Claude', 'DeepSeek', 'Ollama'],
       },
-      frontendUrl: process.env.FRONTEND_URL || 'https://securelens-frontend.onrender.com',
+      frontendUrl: process.env.FRONTEND_URL || 'https://web-production-13bf9.up.railway.app',
     };
   }
 
@@ -113,7 +113,7 @@ export class HealthController {
   private generateStatusHtml(): string {
     const uptime = this.formatUptime(process.uptime());
     const isDbConnected = Boolean(this.prisma?.connected);
-    const frontendUrl = process.env.FRONTEND_URL || 'https://securelens-frontend.onrender.com';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://web-production-13bf9.up.railway.app';
     const nowUtc = new Date().toUTCString();
 
     return `<!DOCTYPE html>
@@ -595,7 +595,7 @@ export class HealthController {
 
     <!-- Footer -->
     <div class="footer">
-      <div>SECURELENS NEXT-GEN SECURITY INTELLIGENCE // RENDER CLOUD HOSTED</div>
+      <div>SECURELENS NEXT-GEN SECURITY INTELLIGENCE // RAILWAY CLOUD HOSTED</div>
       <div>MAINFRAME CLOCK: ${nowUtc}</div>
     </div>
   </div>
