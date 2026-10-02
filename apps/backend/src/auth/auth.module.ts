@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
@@ -8,6 +8,7 @@ import { JwtStrategy } from './jwt.strategy';
 import { GithubStrategy } from './github.strategy';
 import { GoogleStrategy } from './google.strategy';
 
+@Global()
 @Module({
   // Global so WorkspacesService (and others) can inject AuthService / JwtService
   // without each module re-importing AuthModule.
