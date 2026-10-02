@@ -619,8 +619,7 @@ async function runGitHubScan(targetRepo, engineFilter = 'all') {
 
     // Try executing system gitleaks if installed
     try {
-      const gitleaksBin = fs.existsSync('/home/stavan/SecureLensUpdated1/apps/backend/bin/gitleaks')
-        ? '/home/stavan/SecureLensUpdated1/apps/backend/bin/gitleaks' : 'gitleaks';
+      const gitleaksBin = process.env.GITLEAKS_BIN || 'gitleaks';
       const gitleaksOutput = execSync(`${gitleaksBin} detect --source="${repoPath}" --no-git --report-format=json 2>/dev/null`, { timeout: 20000, encoding: 'utf-8' });
       if (gitleaksOutput && gitleaksOutput.trim()) {
         const items = JSON.parse(gitleaksOutput);
