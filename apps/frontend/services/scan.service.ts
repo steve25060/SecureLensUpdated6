@@ -53,7 +53,7 @@ export const scanService = {
    * Create a new scan
    */
   async createScan(request: CreateScanRequest): Promise<ScanResponse> {
-    const response = await api.post('/api/scans/create', request);
+    const response = await api.post('/scans/create', request);
     return response.data;
   },
 
@@ -61,7 +61,7 @@ export const scanService = {
    * Start a scan
    */
   async startScan(scanId: string): Promise<ScanResponse> {
-    const response = await api.post(`/api/scans/${scanId}/start`);
+    const response = await api.post(`/scans/${scanId}/start`);
     return response.data;
   },
 
@@ -69,7 +69,7 @@ export const scanService = {
    * Get scan status
    */
   async getScanStatus(scanId: string): Promise<ScanStatusResponse> {
-    const response = await api.get(`/api/scans/${scanId}/status`);
+    const response = await api.get(`/scans/${scanId}/status`);
     return response.data;
   },
 
@@ -77,7 +77,7 @@ export const scanService = {
    * Get scan results
    */
   async getScanResults(scanId: string): Promise<ScanResult> {
-    const response = await api.get(`/api/scans/${scanId}/results`);
+    const response = await api.get(`/scans/${scanId}/results`);
     return response.data;
   },
 
@@ -85,7 +85,7 @@ export const scanService = {
    * Cancel a scan
    */
   async cancelScan(scanId: string): Promise<ScanResponse> {
-    const response = await api.delete(`/api/scans/${scanId}/cancel`);
+    const response = await api.delete(`/scans/${scanId}/cancel`);
     return response.data;
   },
 
@@ -93,7 +93,7 @@ export const scanService = {
    * Get workspace scans
    */
   async getWorkspaceScans(workspaceId: string): Promise<any[]> {
-    const response = await api.get(`/api/scans/workspace/${workspaceId}`);
+    const response = await api.get(`/scans/workspace/${workspaceId}`);
     return response.data;
   },
 
@@ -101,7 +101,7 @@ export const scanService = {
    * Get available engines (safe names, never actual tools)
    */
   async getAvailableEngines(): Promise<AvailableEngine[]> {
-    const response = await api.get('/api/scans/engines/available');
+    const response = await api.get('/scans/engines/available');
     return response.data;
   },
 
@@ -109,7 +109,7 @@ export const scanService = {
    * Get engines for a specific mode
    */
   async getEnginesForMode(mode: 'website' | 'github' | 'combined'): Promise<AvailableEngine[]> {
-    const response = await api.get(`/api/scans/engines/mode/${mode}`);
+    const response = await api.get(`/scans/engines/mode/${mode}`);
     return response.data;
   },
 
@@ -117,7 +117,7 @@ export const scanService = {
    * Get all constants
    */
   async getConstants(): Promise<any> {
-    const response = await api.get('/api/scans/constants');
+    const response = await api.get('/scans/constants');
     return response.data;
   },
 };
@@ -141,7 +141,7 @@ export const aiService = {
    * Explain a finding
    */
   async explainFinding(findingId: string): Promise<AIResponse> {
-    const response = await api.post('/api/ai-copilot/explain', {
+    const response = await api.post('/ai-copilot/explain', {
       findingId,
     });
     return response.data;
@@ -151,7 +151,7 @@ export const aiService = {
    * Get remediation suggestions
    */
   async suggestRemediation(findingId: string): Promise<AIResponse> {
-    const response = await api.post('/api/ai-copilot/remediate', {
+    const response = await api.post('/ai-copilot/remediate', {
       findingId,
     });
     return response.data;
@@ -161,7 +161,7 @@ export const aiService = {
    * Explain attack scenario
    */
   async explainAttackScenario(findingId: string): Promise<AIResponse> {
-    const response = await api.post('/api/ai-copilot/attack-scenario', {
+    const response = await api.post('/ai-copilot/attack-scenario', {
       findingId,
     });
     return response.data;
@@ -171,7 +171,7 @@ export const aiService = {
    * Generate secure code example
    */
   async generateCodeExample(findingId: string): Promise<AIResponse> {
-    const response = await api.post('/api/ai-copilot/code-example', {
+    const response = await api.post('/ai-copilot/code-example', {
       findingId,
     });
     return response.data;
@@ -181,7 +181,7 @@ export const aiService = {
    * Ask follow-up question
    */
   async askQuestion(findingId: string, question: string): Promise<AIResponse> {
-    const response = await api.post('/api/ai-copilot/question', {
+    const response = await api.post('/ai-copilot/question', {
       findingId,
       question,
     });
@@ -192,7 +192,7 @@ export const aiService = {
    * Check if AI is configured
    */
   async getStatus(): Promise<{ configured: boolean; provider: string }> {
-    const response = await api.get('/api/ai-copilot/status');
+    const response = await api.get('/ai-copilot/status');
     return response.data;
   },
 };
@@ -207,7 +207,7 @@ export const findingsService = {
    * Get findings for a scan
    */
   async getFindingsByScan(scanId: string): Promise<any[]> {
-    const response = await api.get(`/api/findings/scan/${scanId}`);
+    const response = await api.get(`/findings/scan/${scanId}`);
     return response.data;
   },
 
@@ -215,7 +215,7 @@ export const findingsService = {
    * Get finding details
    */
   async getFinding(findingId: string): Promise<any> {
-    const response = await api.get(`/api/findings/${findingId}`);
+    const response = await api.get(`/findings/${findingId}`);
     return response.data;
   },
 
@@ -226,7 +226,7 @@ export const findingsService = {
     findingId: string,
     status: 'new' | 'open' | 'acknowledged' | 'resolved' | 'false_positive',
   ): Promise<any> {
-    const response = await api.patch(`/api/findings/${findingId}`, {
+    const response = await api.patch(`/findings/${findingId}`, {
       status,
     });
     return response.data;
@@ -236,7 +236,7 @@ export const findingsService = {
    * Get findings statistics
    */
   async getFindingsStats(scanId: string): Promise<any> {
-    const response = await api.get(`/api/findings/stats/${scanId}`);
+    const response = await api.get(`/findings/stats/${scanId}`);
     return response.data;
   },
 };
@@ -270,7 +270,7 @@ export const workspaceService = {
    * Create a new workspace
    */
   async createWorkspace(request: CreateWorkspaceRequest): Promise<WorkspaceResponse> {
-    const response = await api.post('/api/workspaces', request);
+    const response = await api.post('/workspaces', request);
     return response.data;
   },
 
@@ -278,7 +278,7 @@ export const workspaceService = {
    * Get all workspaces for the user
    */
   async getWorkspaces(): Promise<WorkspaceResponse[]> {
-    const response = await api.get('/api/workspaces');
+    const response = await api.get('/workspaces');
     return response.data;
   },
 
@@ -286,7 +286,7 @@ export const workspaceService = {
    * Get workspace details
    */
   async getWorkspace(workspaceId: string): Promise<WorkspaceResponse> {
-    const response = await api.get(`/api/workspaces/${workspaceId}`);
+    const response = await api.get(`/workspaces/${workspaceId}`);
     return response.data;
   },
 
@@ -297,7 +297,7 @@ export const workspaceService = {
     workspaceId: string,
     request: Partial<CreateWorkspaceRequest>,
   ): Promise<WorkspaceResponse> {
-    const response = await api.patch(`/api/workspaces/${workspaceId}`, request);
+    const response = await api.patch(`/workspaces/${workspaceId}`, request);
     return response.data;
   },
 
@@ -305,7 +305,7 @@ export const workspaceService = {
    * Delete workspace
    */
   async deleteWorkspace(workspaceId: string): Promise<{ success: boolean }> {
-    const response = await api.delete(`/api/workspaces/${workspaceId}`);
+    const response = await api.delete(`/workspaces/${workspaceId}`);
     return response.data;
   },
 };
