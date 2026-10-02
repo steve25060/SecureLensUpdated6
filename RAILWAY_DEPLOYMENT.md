@@ -10,6 +10,8 @@ Source repository: `steve25060/SecureLensUpdated6`
 Branch: `main`  
 Root directory: `/`
 
+Clear any custom **Build Command** or **Start Command** override in Railway so the Dockerfile build and its `CMD` are used.
+
 Set this Railway service variable so Railway uses the correct Dockerfile:
 
 ```env
@@ -65,6 +67,8 @@ Source repository: `steve25060/SecureLensUpdated6`
 Branch: `main`  
 Root directory: `/`
 
+Clear any custom **Build Command** or **Start Command** override in Railway so the Dockerfile build and its `CMD` are used.
+
 Set:
 
 ```env
@@ -78,7 +82,9 @@ NEXT_PUBLIC_ENABLE_DEMO_AUTH=false
 
 The frontend uses the same-origin `/api/*` path. Next.js rewrites it server-side to the NestJS backend.
 
-The frontend also listens on Railway's injected `PORT` value.
+The frontend also listens on Railway's injected `PORT` value. Do not manually pin `PORT` on either web service unless you have a specific networking reason.
+
+Recommended frontend healthcheck path: `/`.
 
 ## PostgreSQL
 
