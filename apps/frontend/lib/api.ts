@@ -1,23 +1,13 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 /**
- * API Client Configuration
+ * Central browser API client.
  *
- * DEVELOPMENT: Uses NEXT_PUBLIC_BACKEND_URL or defaults to /api (proxied via Next.js)
- * PRODUCTION: Uses NEXT_PUBLIC_BACKEND_URL (direct calls to Render backend)
- *
- * Environment Variables:
- * - NEXT_PUBLIC_API_URL: Full URL to API endpoints (e.g., http://localhost:4000/api)
- * - NEXT_PUBLIC_BACKEND_URL: Backend base URL (e.g., http://localhost:4000)
+ * Browser requests use the same-origin /api path. Next.js rewrites /api/* to
+ * the NestJS backend, which keeps auth and routing consistent in development
+ * and on Railway.
  */
-
-// Always use Next.js rewrite proxy for API calls
-// This ensures all requests go through the configured rewrites in next.config.js
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
-
-console.log('[API Client] Configured with BASE_URL:', BASE_URL);
-console.log('[API Client] NODE_ENV:', process.env.NODE_ENV);
-console.log('[API Client] Backend URL:', process.env.NEXT_PUBLIC_BACKEND_URL);
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || '/api').replace(/\/+$/, '');
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -25,7 +15,7 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   // Enable credentials for cross-origin requests (cookies, auth headers)
-  withCredentials: process.env.NODE_ENV === 'production',
+  withCredentials: true,
 });
 
 /* ── Request interceptor: attach JWT ─────────────────────────── */
