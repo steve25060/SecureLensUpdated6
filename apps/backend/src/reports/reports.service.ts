@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -26,19 +26,22 @@ export class ReportsService {
         this.logger.warn(`DB reports findAll failed (${err.message})`);
       }
     }
+    if (process.env.NODE_ENV === 'production') {
+      throw new ServiceUnavailableException('Database is unavailable');
+    }
     return [];
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId: string) {
     if (this.prisma.connected) {
       try {
-        const r = await this.prisma.report.findUnique({ where: { id } });
+        const r = await this.prisma.report.findFirst({ where: { id, userId } });
         if (r) return r;
       } catch (err: any) {
         this.logger.warn(`DB report findOne failed (${err.message})`);
       }
     }
-    return null;
+    throw new NotFoundException(`Report not found: ${id}`);
   }
 
   /**
@@ -49,49 +52,64 @@ export class ReportsService {
     const type = (data.type ?? 'EXECUTIVE_SUMMARY') as any;
     const name = data.name ?? this.defaultName(type);
 
-    if (this.prisma.connected) {
-      try {
-        // Compute summary from real findings
-        const findingsWhere: any = data.workspaceId
-          ? { workspaceId: data.workspaceId }
-          : { scan: { workspace: { userId } } };
-        const findings = await this.prisma.finding.findMany({ where: findingsWhere, take: 1000 });
-        const summary = this.buildSummary(findings);
-
-        const report = await this.prisma.report.create({
-          data: {
-            name,
-            type,
-            status: 'COMPLETED',
-            userId,
-            workspaceId: data.workspaceId ?? (await this.firstWorkspaceId(userId)) ?? 'none',
-            summary: summary as any,
-            generatedAt: new Date(),
-          },
-        });
-        this.logger.log(`Report created: ${report.id}`);
-        return report;
-      } catch (err: any) {
-        this.logger.warn(`DB report create failed (${err.message})`);
+    if (!this.prisma.connected) {
+      if (process.env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableException('Database is unavailable');
       }
+      return {
+        id: randomUUID(),
+        name,
+        type,
+        status: 'COMPLETED',
+        userId,
+        summary: this.buildSummary([]),
+        createdAt: new Date().toISOString(),
+        _offline: true,
+      };
     }
-    // Offline minimal stub
-    return {
-      id: randomUUID(),
-      name,
-      type,
-      status: 'COMPLETED',
-      userId,
-      summary: this.buildSummary([]),
-      createdAt: new Date().toISOString(),
-      _offline: true,
-    };
+
+    const workspace = data.workspaceId
+      ? await this.prisma.workspace.findFirst({ where: { id: data.workspaceId, userId } })
+      : await this.prisma.workspace.findFirst({ where: { userId }, orderBy: { createdAt: 'asc' } });
+
+    if (!workspace) {
+      throw new BadRequestException('Create a workspace before generating a report');
+    }
+
+    try {
+      const findings = await this.prisma.finding.findMany({
+        where: {
+          workspaceId: workspace.id,
+          workspace: { userId },
+        },
+        take: 1000,
+      });
+      const summary = this.buildSummary(findings);
+
+      const report = await this.prisma.report.create({
+        data: {
+          name,
+          type,
+          status: 'COMPLETED',
+          userId,
+          workspaceId: workspace.id,
+          summary: summary as any,
+          generatedAt: new Date(),
+        },
+      });
+      this.logger.log(`Report created: ${report.id}`);
+      return report;
+    } catch (err: any) {
+      this.logger.error(`DB report create failed (${err.message})`);
+      throw err;
+    }
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId: string) {
+    await this.findOne(id, userId);
     if (this.prisma.connected) {
       try {
-        await this.prisma.report.delete({ where: { id } });
+        await this.prisma.report.deleteMany({ where: { id, userId } });
         return { success: true, id };
       } catch (err: any) {
         this.logger.warn(`DB report delete failed (${err.message})`);
@@ -100,18 +118,20 @@ export class ReportsService {
     return { success: true, id };
   }
 
-  async removeBulk(ids: string[]) {
+  async removeBulk(ids: string[], userId: string) {
+    const uniqueIds = Array.from(new Set((ids || []).filter(Boolean)));
     if (this.prisma.connected) {
       try {
         const result = await this.prisma.report.deleteMany({
-          where: { id: { in: ids } },
+          where: { id: { in: uniqueIds }, userId },
         });
         return { success: true, count: result.count };
       } catch (err: any) {
-        this.logger.warn(`DB report bulk delete failed (${err.message})`);
+        this.logger.error(`DB report bulk delete failed (${err.message})`);
+        throw err;
       }
     }
-    return { success: true, count: ids.length };
+    return { success: true, count: 0 };
   }
 
   async removeAll(userId: string) {
