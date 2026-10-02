@@ -1,11 +1,11 @@
 import { Controller, Get, Post, Delete, Param, Req, UseGuards } from '@nestjs/common';
-import { OptionalJwtAuthGuard } from '../auth/jwt.guard';
+import { JwtAuthGuard } from '../auth/jwt.guard';
 import { NotificationsService } from './notifications.service';
 
 interface AuthRequest { user?: { userId?: string; id?: string } }
 
 @Controller('notifications')
-@UseGuards(OptionalJwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
