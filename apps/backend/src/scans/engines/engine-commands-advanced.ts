@@ -35,7 +35,7 @@ export interface EngineCommandConfig {
 
 const dnsx_command: EngineCommandConfig = {
   description: 'DNS resolution and validation using dnsx',
-  cmd: 'echo "<TARGET>" | dnsx -json 2>/dev/null || echo ""',
+  cmd: 'echo "<TARGET>" | dnsx -json',
   timeout: 30,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -65,7 +65,7 @@ const dnsx_command: EngineCommandConfig = {
 
 const subfinder_command: EngineCommandConfig = {
   description: 'Subdomain enumeration using subfinder',
-  cmd: 'subfinder -d <TARGET> -silent 2>/dev/null || echo ""',
+  cmd: 'subfinder -d <TARGET> -silent',
   timeout: 60,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -97,7 +97,7 @@ const subfinder_command: EngineCommandConfig = {
 
 const httpx_command: EngineCommandConfig = {
   description: 'Detect live HTTP/HTTPS services with httpx',
-  cmd: 'echo "<TARGET>" | httpx -json -title -status-code 2>/dev/null || echo ""',
+  cmd: 'echo "<TARGET>" | httpx -json -title -status-code',
   timeout: 120,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -142,7 +142,7 @@ const httpx_command: EngineCommandConfig = {
 
 const whatweb_command: EngineCommandConfig = {
   description: 'Web technology fingerprinting using WhatWeb',
-  cmd: 'whatweb <TARGET> --log-json=- 2>/dev/null || echo ""',
+  cmd: 'whatweb <TARGET> --log-json=-',
   timeout: 60,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -179,7 +179,7 @@ const whatweb_command: EngineCommandConfig = {
 
 const testssl_command: EngineCommandConfig = {
   description: 'SSL/TLS configuration analysis using testssl',
-  cmd: 'timeout 60 testssl --quiet --fast <TARGET> 2>/dev/null || echo ""',
+  cmd: 'timeout 60 testssl --quiet --fast <TARGET>',
   timeout: 75,
   requiresRootOrSudo: false,
   parser: (output: string, target: string): FindingTemplate[] => {
@@ -207,7 +207,7 @@ const testssl_command: EngineCommandConfig = {
 
 const katana_command: EngineCommandConfig = {
   description: 'Web endpoint discovery using Katana',
-  cmd: 'katana -u <TARGET> -jsonl -silent 2>/dev/null | head -50 || echo ""',
+  cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent 2>/dev/null | head -50 || echo ""',
   timeout: 90,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -248,7 +248,7 @@ const katana_command: EngineCommandConfig = {
 
 const nmap_command: EngineCommandConfig = {
   description: 'Network port and service scanning using Nmap',
-  cmd: 'nmap -F --open -sV <TARGET> 2>/dev/null || echo ""',
+  cmd: 'nmap -F --open -sV <TARGET>',
   timeout: 120,
   requiresRootOrSudo: false,
   parser: (output: string, target: string): FindingTemplate[] => {
@@ -285,7 +285,7 @@ const nmap_command: EngineCommandConfig = {
 
 const nuclei_command: EngineCommandConfig = {
   description: 'Vulnerability detection using Nuclei templates',
-  cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 2>/dev/null || echo ""',
+  cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5',
   timeout: 45,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -404,7 +404,7 @@ const container_security_command: EngineCommandConfig = {
 
 const http_security_command: EngineCommandConfig = {
   description: 'Deep HTTP security headers, cookies, and CORS audit',
-  cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>"',
   timeout: 30,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -432,7 +432,7 @@ const http_security_command: EngineCommandConfig = {
 
 const api_security_command: EngineCommandConfig = {
   description: 'API Security & GraphQL Auditor (OpenAPI/Swagger docs & GraphQL introspection)',
-  cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>"',
   timeout: 30,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -461,7 +461,7 @@ const api_security_command: EngineCommandConfig = {
 
 const waf_detection_command: EngineCommandConfig = {
   description: 'WAF & Perimeter Defense (Cloudflare, AWS WAF, Akamai & Origin Protection)',
-  cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>"',
   timeout: 20,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -490,7 +490,7 @@ const waf_detection_command: EngineCommandConfig = {
 
 const email_security_command: EngineCommandConfig = {
   description: 'Email Security & Anti-Spoofing Check (DMARC, SPF, and MX Validation)',
-  cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>"',
   timeout: 25,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -519,7 +519,7 @@ const email_security_command: EngineCommandConfig = {
 
 const privacy_compliance_command: EngineCommandConfig = {
   description: 'Privacy & Cookie Compliance Check (Trackers, PII, and Mixed Content)',
-  cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>"',
   timeout: 25,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -548,7 +548,7 @@ const privacy_compliance_command: EngineCommandConfig = {
 
 const security_intelligence_command: EngineCommandConfig = {
   description: 'Correlate attack surface data, CVSS prioritization & threat intelligence',
-  cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"',
+  cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>"',
   timeout: 20,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -635,84 +635,84 @@ export interface ProfileCommandConfig {
 
 const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
   dnsx: {
-    fast: { cmd: 'echo "<TARGET>" | dnsx -json -t 50 2>/dev/null || echo ""', timeout: 15 },
-    normal: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname 2>/dev/null || echo ""', timeout: 30 },
-    aggressive: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname -mx -txt -ns -soa -ptr -resp -recon -retry 3 -timeout 15 2>/dev/null || echo ""', timeout: 90 },
+    fast: { cmd: 'echo "<TARGET>" | dnsx -json -t 50', timeout: 15 },
+    normal: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname', timeout: 30 },
+    aggressive: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname -mx -txt -ns -soa -ptr -resp -recon -retry 3 -timeout 15', timeout: 90 },
   },
   dns_check: {
-    fast: { cmd: 'echo "<TARGET>" | dnsx -json -t 50 2>/dev/null || echo ""', timeout: 15 },
-    normal: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname 2>/dev/null || echo ""', timeout: 30 },
-    aggressive: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname -mx -txt -ns -soa -ptr -resp -recon -retry 3 -timeout 15 2>/dev/null || echo ""', timeout: 90 },
+    fast: { cmd: 'echo "<TARGET>" | dnsx -json -t 50', timeout: 15 },
+    normal: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname', timeout: 30 },
+    aggressive: { cmd: 'echo "<TARGET>" | dnsx -json -a -aaaa -cname -mx -txt -ns -soa -ptr -resp -recon -retry 3 -timeout 15', timeout: 90 },
   },
   subfinder: {
-    fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15 2>/dev/null || echo ""', timeout: 20 },
-    normal: { cmd: 'subfinder -d <TARGET> -silent -max-time 45 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'subfinder -d <TARGET> -silent -all -recursive -t 50 -max-time 180 2>/dev/null || echo ""', timeout: 190 },
+    fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15', timeout: 20 },
+    normal: { cmd: 'subfinder -d <TARGET> -silent -max-time 45', timeout: 60 },
+    aggressive: { cmd: 'subfinder -d <TARGET> -silent -all -recursive -t 50 -max-time 180', timeout: 190 },
   },
   subdomain_discovery: {
-    fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15 2>/dev/null || echo ""', timeout: 20 },
-    normal: { cmd: 'subfinder -d <TARGET> -silent -max-time 45 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'subfinder -d <TARGET> -silent -all -recursive -t 50 -max-time 180 2>/dev/null || echo ""', timeout: 190 },
+    fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15', timeout: 20 },
+    normal: { cmd: 'subfinder -d <TARGET> -silent -max-time 45', timeout: 60 },
+    aggressive: { cmd: 'subfinder -d <TARGET> -silent -all -recursive -t 50 -max-time 180', timeout: 190 },
   },
   httpx: {
-    fast: { cmd: 'echo "<TARGET>" | httpx -json -title -status-code -timeout 5 2>/dev/null || echo ""', timeout: 30 },
-    normal: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -timeout 10 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -server -web-server -favicon -jarm -tls-grab -probe -asn -cdn -threads 50 -timeout 25 2>/dev/null || echo ""', timeout: 150 },
+    fast: { cmd: 'echo "<TARGET>" | httpx -json -title -status-code -timeout 5', timeout: 30 },
+    normal: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -timeout 10', timeout: 60 },
+    aggressive: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -server -web-server -favicon -jarm -tls-grab -probe -asn -cdn -threads 50 -timeout 25', timeout: 150 },
   },
   asset_discovery: {
-    fast: { cmd: 'echo "<TARGET>" | httpx -json -title -status-code -timeout 5 2>/dev/null || echo ""', timeout: 30 },
-    normal: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -timeout 10 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -server -web-server -favicon -jarm -tls-grab -probe -asn -cdn -threads 50 -timeout 25 2>/dev/null || echo ""', timeout: 150 },
+    fast: { cmd: 'echo "<TARGET>" | httpx -json -title -status-code -timeout 5', timeout: 30 },
+    normal: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -timeout 10', timeout: 60 },
+    aggressive: { cmd: 'echo "<TARGET>" | httpx -json -title -tech-detect -status-code -content-type -server -web-server -favicon -jarm -tls-grab -probe -asn -cdn -threads 50 -timeout 25', timeout: 150 },
   },
   whatweb: {
-    fast: { cmd: 'whatweb <TARGET> -a 1 --log-json=- 2>/dev/null || echo ""', timeout: 30 },
-    normal: { cmd: 'whatweb <TARGET> -a 3 --log-json=- 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'whatweb <TARGET> -a 4 --user-agent "Mozilla/5.0 SecureLens-Security-Audit" --max-threads 30 --log-json=- 2>/dev/null || echo ""', timeout: 150 },
+    fast: { cmd: 'whatweb <TARGET> -a 1 --log-json=-', timeout: 30 },
+    normal: { cmd: 'whatweb <TARGET> -a 3 --log-json=-', timeout: 60 },
+    aggressive: { cmd: 'whatweb <TARGET> -a 4 --user-agent "Mozilla/5.0 SecureLens-Security-Audit" --max-threads 30 --log-json=-', timeout: 150 },
   },
   tech_detection: {
-    fast: { cmd: 'whatweb <TARGET> -a 1 --log-json=- 2>/dev/null || echo ""', timeout: 30 },
-    normal: { cmd: 'whatweb <TARGET> -a 3 --log-json=- 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'whatweb <TARGET> -a 4 --user-agent "Mozilla/5.0 SecureLens-Security-Audit" --max-threads 30 --log-json=- 2>/dev/null || echo ""', timeout: 150 },
+    fast: { cmd: 'whatweb <TARGET> -a 1 --log-json=-', timeout: 30 },
+    normal: { cmd: 'whatweb <TARGET> -a 3 --log-json=-', timeout: 60 },
+    aggressive: { cmd: 'whatweb <TARGET> -a 4 --user-agent "Mozilla/5.0 SecureLens-Security-Audit" --max-threads 30 --log-json=-', timeout: 150 },
   },
   testssl: {
-    fast: { cmd: 'timeout 30 testssl --quiet --fast <TARGET> 2>/dev/null || echo ""', timeout: 35 },
-    normal: { cmd: 'timeout 60 testssl --quiet --fast --poodle --freak <TARGET> 2>/dev/null || echo ""', timeout: 75 },
-    aggressive: { cmd: 'timeout 180 testssl --quiet --full --vulnerable --sneaky --warnings batch <TARGET> 2>/dev/null || echo ""', timeout: 190 },
+    fast: { cmd: 'timeout 30 testssl --quiet --fast <TARGET>', timeout: 35 },
+    normal: { cmd: 'timeout 60 testssl --quiet --fast --poodle --freak <TARGET>', timeout: 75 },
+    aggressive: { cmd: 'timeout 180 testssl --quiet --full --vulnerable --sneaky --warnings batch <TARGET>', timeout: 190 },
   },
   ssl_tls_analysis: {
-    fast: { cmd: 'timeout 30 testssl --quiet --fast <TARGET> 2>/dev/null || echo ""', timeout: 35 },
-    normal: { cmd: 'timeout 60 testssl --quiet --fast --poodle --freak <TARGET> 2>/dev/null || echo ""', timeout: 75 },
-    aggressive: { cmd: 'timeout 180 testssl --quiet --full --vulnerable --sneaky --warnings batch <TARGET> 2>/dev/null || echo ""', timeout: 190 },
+    fast: { cmd: 'timeout 30 testssl --quiet --fast <TARGET>', timeout: 35 },
+    normal: { cmd: 'timeout 60 testssl --quiet --fast --poodle --freak <TARGET>', timeout: 75 },
+    aggressive: { cmd: 'timeout 180 testssl --quiet --full --vulnerable --sneaky --warnings batch <TARGET>', timeout: 190 },
   },
   katana: {
-    fast: { cmd: 'katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | head -30 || echo ""', timeout: 20 },
-    normal: { cmd: 'katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | head -100 || echo ""', timeout: 60 },
-    aggressive: { cmd: 'katana -u <TARGET> -jsonl -silent -d 6 -jc -ct 50 -f qurl -kf all -c 40 -timeout 30 2>/dev/null | head -500 || echo ""', timeout: 160 },
+    fast: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | head -30 || echo ""', timeout: 20 },
+    normal: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | head -100 || echo ""', timeout: 60 },
+    aggressive: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 6 -jc -ct 50 -f qurl -kf all -c 40 -timeout 30 2>/dev/null | head -500 || echo ""', timeout: 160 },
   },
   endpoint_discovery: {
-    fast: { cmd: 'katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | head -30 || echo ""', timeout: 20 },
-    normal: { cmd: 'katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | head -100 || echo ""', timeout: 60 },
-    aggressive: { cmd: 'katana -u <TARGET> -jsonl -silent -d 6 -jc -ct 50 -f qurl -kf all -c 40 -timeout 30 2>/dev/null | head -500 || echo ""', timeout: 160 },
+    fast: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | head -30 || echo ""', timeout: 20 },
+    normal: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | head -100 || echo ""', timeout: 60 },
+    aggressive: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 6 -jc -ct 50 -f qurl -kf all -c 40 -timeout 30 2>/dev/null | head -500 || echo ""', timeout: 160 },
   },
   nmap: {
-    fast: { cmd: 'nmap -F --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 45 },
-    normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 90 },
-    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET> 2>/dev/null || echo ""', timeout: 300 },
+    fast: { cmd: 'nmap -F --open -sV <TARGET>', timeout: 45 },
+    normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET>', timeout: 90 },
+    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET>', timeout: 300 },
   },
   network_exposure: {
-    fast: { cmd: 'nmap -F --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 45 },
-    normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 90 },
-    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET> 2>/dev/null || echo ""', timeout: 300 },
+    fast: { cmd: 'nmap -F --open -sV <TARGET>', timeout: 45 },
+    normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET>', timeout: 90 },
+    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET>', timeout: 300 },
   },
   nuclei: {
-    fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures 2>/dev/null || echo ""', timeout: 30 },
-    normal: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 8 -t http/exposures,http/vulnerabilities,http/misconfiguration 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 20 -dast -severity critical,high,medium,low -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,http/cves,network,ssl 2>/dev/null || echo ""', timeout: 240 },
+    fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures', timeout: 30 },
+    normal: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 8 -t http/exposures,http/vulnerabilities,http/misconfiguration', timeout: 60 },
+    aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 20 -dast -severity critical,high,medium,low -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,http/cves,network,ssl', timeout: 240 },
   },
   vulnerability_detection: {
-    fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures 2>/dev/null || echo ""', timeout: 30 },
-    normal: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 8 -t http/exposures,http/vulnerabilities,http/misconfiguration 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 20 -dast -severity critical,high,medium,low -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,http/cves,network,ssl 2>/dev/null || echo ""', timeout: 240 },
+    fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures', timeout: 30 },
+    normal: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 8 -t http/exposures,http/vulnerabilities,http/misconfiguration', timeout: 60 },
+    aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 20 -dast -severity critical,high,medium,low -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,http/cves,network,ssl', timeout: 240 },
   },
   repository_overview: {
     fast: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "repository_overview" 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 20 },
@@ -770,59 +770,59 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     aggressive: { cmd: 'node <SCRIPTS_DIR>/github-security-scanner.js "<TARGET>" "dependency_analysis" --deep --full-tree --transitive 2>/dev/null || echo "{\\"findings\\":[]}"', timeout: 150 },
   },
   vulnerability_scanner: {
-    fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures 2>/dev/null || echo ""', timeout: 30 },
-    normal: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 8 -t http/exposures,http/vulnerabilities,http/misconfiguration 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 20 -dast -severity critical,high,medium,low -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,http/cves,network,ssl 2>/dev/null || echo ""', timeout: 240 },
+    fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures', timeout: 30 },
+    normal: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 8 -t http/exposures,http/vulnerabilities,http/misconfiguration', timeout: 60 },
+    aggressive: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 20 -dast -severity critical,high,medium,low -t cves,http/vulnerabilities,http/misconfiguration,http/exposures,http/cves,network,ssl', timeout: 240 },
   },
   port_scanner: {
-    fast: { cmd: 'nmap -F --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 45 },
-    normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET> 2>/dev/null || echo ""', timeout: 90 },
-    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET> 2>/dev/null || echo ""', timeout: 300 },
+    fast: { cmd: 'nmap -F --open -sV <TARGET>', timeout: 45 },
+    normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET>', timeout: 90 },
+    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET>', timeout: 300 },
   },
   website_finder: {
-    fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15 2>/dev/null || echo ""', timeout: 20 },
-    normal: { cmd: 'subfinder -d <TARGET> -silent -max-time 45 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'subfinder -d <TARGET> -silent -all -recursive -t 50 -max-time 180 2>/dev/null || echo ""', timeout: 190 },
+    fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15', timeout: 20 },
+    normal: { cmd: 'subfinder -d <TARGET> -silent -max-time 45', timeout: 60 },
+    aggressive: { cmd: 'subfinder -d <TARGET> -silent -all -recursive -t 50 -max-time 180', timeout: 190 },
   },
   website_info: {
-    fast: { cmd: 'whatweb <TARGET> -a 1 --log-json=- 2>/dev/null || echo ""', timeout: 30 },
-    normal: { cmd: 'whatweb <TARGET> -a 3 --log-json=- 2>/dev/null || echo ""', timeout: 60 },
-    aggressive: { cmd: 'whatweb <TARGET> -a 4 --user-agent "Mozilla/5.0 SecureLens-Security-Audit" --max-threads 30 --log-json=- 2>/dev/null || echo ""', timeout: 150 },
+    fast: { cmd: 'whatweb <TARGET> -a 1 --log-json=-', timeout: 30 },
+    normal: { cmd: 'whatweb <TARGET> -a 3 --log-json=-', timeout: 60 },
+    aggressive: { cmd: 'whatweb <TARGET> -a 4 --user-agent "Mozilla/5.0 SecureLens-Security-Audit" --max-threads 30 --log-json=-', timeout: 150 },
   },
   ssl_checker: {
-    fast: { cmd: 'timeout 30 testssl --quiet --fast <TARGET> 2>/dev/null || echo ""', timeout: 35 },
-    normal: { cmd: 'timeout 60 testssl --quiet --fast --poodle --freak <TARGET> 2>/dev/null || echo ""', timeout: 75 },
-    aggressive: { cmd: 'timeout 180 testssl --quiet --full --vulnerable --sneaky --warnings batch <TARGET> 2>/dev/null || echo ""', timeout: 190 },
+    fast: { cmd: 'timeout 30 testssl --quiet --fast <TARGET>', timeout: 35 },
+    normal: { cmd: 'timeout 60 testssl --quiet --fast --poodle --freak <TARGET>', timeout: 75 },
+    aggressive: { cmd: 'timeout 180 testssl --quiet --full --vulnerable --sneaky --warnings batch <TARGET>', timeout: 190 },
   },
   http_security: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 30 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" --deep --fuzz-cors --check-all-headers 2>/dev/null || echo "[]"', timeout: 60 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>"', timeout: 30 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/http-security-audit.js "<TARGET>" --deep --fuzz-cors --check-all-headers', timeout: 60 },
   },
   api_security: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 30 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" --deep --swagger-discovery --graphql-probe --jwt-fuzz 2>/dev/null || echo "[]"', timeout: 60 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>"', timeout: 30 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/api-security-audit.js "<TARGET>" --deep --swagger-discovery --graphql-probe --jwt-fuzz', timeout: 60 },
   },
   waf_detection: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 20 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" --deep --bypass-analysis --cloud-fingerprint 2>/dev/null || echo "[]"', timeout: 45 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>"', timeout: 20 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/waf-security-audit.js "<TARGET>" --deep --bypass-analysis --cloud-fingerprint', timeout: 45 },
   },
   email_security: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 25 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" --deep --spf --dkim --dmarc --bimi --mta-sts 2>/dev/null || echo "[]"', timeout: 50 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>"', timeout: 25 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/email-security-audit.js "<TARGET>" --deep --spf --dkim --dmarc --bimi --mta-sts', timeout: 50 },
   },
   privacy_compliance: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 25 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" --deep --gdpr --ccpa --cookie-inventory --third-party-trackers 2>/dev/null || echo "[]"', timeout: 50 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>"', timeout: 25 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/privacy-security-audit.js "<TARGET>" --deep --gdpr --ccpa --cookie-inventory --third-party-trackers', timeout: 50 },
   },
   security_intelligence: {
-    fast: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 15 },
-    normal: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" 2>/dev/null || echo "[]"', timeout: 20 },
-    aggressive: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" --deep --threat-correlation --cve-intel 2>/dev/null || echo "[]"', timeout: 45 },
+    fast: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>"', timeout: 15 },
+    normal: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>"', timeout: 20 },
+    aggressive: { cmd: 'node <SCRIPTS_DIR>/security-intelligence.js "<TARGET>" --deep --threat-correlation --cve-intel', timeout: 45 },
   },
 };
 
