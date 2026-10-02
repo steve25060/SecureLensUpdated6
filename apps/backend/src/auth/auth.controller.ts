@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Put, Body, Get, Req, UseGuards, Redirect, UnauthorizedException,
+  Controller, Post, Put, Body, Get, Req, UseGuards, Redirect, UnauthorizedException, ForbiddenException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService, OAuthProfile } from './auth.service';
@@ -28,8 +28,10 @@ export class AuthController {
   }
 
   @Put('profile')
+  @UseGuards(AuthGuard('jwt'))
   async updateProfile(@Req() req: AuthenticatedRequest, @Body() body: { name?: string; email?: string; organization?: string }) {
-    const userId = req.user?.userId || req.user?.sub || 'test-user-1';
+    const userId = req.user?.userId || req.user?.sub;
+    if (!userId) throw new UnauthorizedException('Not authenticated');
     return this.authService.updateProfile(userId, body);
   }
 
@@ -44,6 +46,7 @@ export class AuthController {
   /** Convenience endpoint that mints a demo token (dev only). */
   @Get('demo-token')
   async getDemoToken() {
+    this.assertDemoAuthEnabled();
     const seeded = await this.authService.ensureDemoUser();
     return this.authService.login({ email: seeded.email, name: seeded.name });
   }
@@ -64,6 +67,7 @@ export class AuthController {
   /** Direct single-click social login endpoint */
   @Post('social-login')
   async socialLogin(@Body() body: { provider: 'google' | 'github'; email?: string; name?: string; photo?: string; id?: string }) {
+    this.assertDemoAuthEnabled();
     const provider = body.provider || 'google';
     const isGoogle = provider === 'google';
     const profile: OAuthProfile = {
@@ -126,6 +130,12 @@ export class AuthController {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     this.consoleLog('GitHub Callback', `${frontendUrl}/callback?token=${result.access_token}&provider=github`);
     return { url: `${frontendUrl}/callback?token=${result.access_token}&provider=github`, statusCode: 302 };
+  }
+
+  private assertDemoAuthEnabled() {
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_DEMO_AUTH !== 'true') {
+      throw new ForbiddenException('Demo authentication is disabled in production');
+    }
   }
 
   private consoleLog(provider: string, url: string) {
