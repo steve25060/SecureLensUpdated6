@@ -98,8 +98,6 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
   }) => {
     setLoadingAction(true);
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:4000";
-
       // Call backend social login endpoint
       fetch('/api/auth/social-login', {
         method: "POST",
@@ -168,8 +166,7 @@ export default function SocialLoginButtons({ mode = "login", onGitHub, onGoogle 
   };
 
   const handleLiveRedirect = (provider: "google" | "github") => {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "https://securelens-backend-o213.onrender.com";
-    window.location.href = `${backendUrl}/api/auth/${provider}`;
+    window.location.href = `/api/auth/${provider}`;
   };
 
   const githubLabel = mode === "register" ? "Sign up with GitHub" : "Sign in with GitHub";
