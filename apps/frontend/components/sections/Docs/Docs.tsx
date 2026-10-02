@@ -60,7 +60,7 @@ export const DOC_TOPICS: DocTopic[] = [
         codeSnippet: {
           language: 'bash',
           code: `# Launch an automated multi-vector scan via SecureLens API
-curl -X POST https://securelens-backend-o213.onrender.com/api/scans/website \\
+curl -X POST https://web-production-e3c1e.up.railway.app/api/scans/website \\
   -H "Authorization: Bearer <YOUR_SECURELENS_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -155,7 +155,7 @@ http:
         codeSnippet: {
           language: 'http',
           code: `POST /api/scans/website HTTP/1.1
-Host: securelens-backend-o213.onrender.com
+Host: web-production-e3c1e.up.railway.app
 Authorization: Bearer <YOUR_SECURELENS_API_KEY>
 Content-Type: application/json`
         }
@@ -262,7 +262,7 @@ jobs:
 
       - name: Trigger SecureLens SAST & Secret Scan
         run: |
-          curl -s -X POST https://securelens-backend-o213.onrender.com/api/scans/github \\
+          curl -s -X POST https://web-production-e3c1e.up.railway.app/api/scans/github \\
             -H "Authorization: Bearer \${{ secrets.SECURELENS_API_KEY }}" \\
             -H "Content-Type: application/json" \\
             -d '{
@@ -308,9 +308,9 @@ jobs:
         codeSnippet: {
           language: 'text',
           code: `Authorized Redirect URIs:
-https://securelens-backend-o213.onrender.com/api/auth/google/callback
-https://securelens-backend-o213.onrender.com/api/auth/github/callback
-https://securelens-frontend.onrender.com/callback`
+https://web-production-e3c1e.up.railway.app/api/auth/google/callback
+https://web-production-e3c1e.up.railway.app/api/auth/github/callback
+https://web-production-13bf9.up.railway.app/callback`
         }
       },
       {
