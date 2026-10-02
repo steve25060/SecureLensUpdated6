@@ -13,7 +13,7 @@
     "dev:with-services": "./start-dev.sh",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
-    "prisma:deploy": "prisma db push",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "ts-node -r dotenv/config prisma/seed.ts"
   },
   "dependencies": {
