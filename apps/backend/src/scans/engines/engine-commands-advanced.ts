@@ -697,12 +697,12 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
   nmap: {
     fast: { cmd: 'nmap -F --open -sV <TARGET>', timeout: 45 },
     normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET>', timeout: 90 },
-    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET>', timeout: 300 },
+    aggressive: { cmd: 'nmap -p- --open -sT -sV -sC --version-all -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title" <TARGET>', timeout: 300 },
   },
   network_exposure: {
     fast: { cmd: 'nmap -F --open -sV <TARGET>', timeout: 45 },
     normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET>', timeout: 90 },
-    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET>', timeout: 300 },
+    aggressive: { cmd: 'nmap -p- --open -sT -sV -sC --version-all -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title" <TARGET>', timeout: 300 },
   },
   nuclei: {
     fast: { cmd: 'nuclei -u <TARGET> -jsonl -silent -timeout 5 -t http/technologies,http/exposures', timeout: 30 },
@@ -777,7 +777,7 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
   port_scanner: {
     fast: { cmd: 'nmap -F --open -sV <TARGET>', timeout: 45 },
     normal: { cmd: 'nmap -p 21,22,23,25,53,80,110,143,443,465,587,993,995,1433,1521,3306,3389,5432,5900,6379,8000,8080,8443,8888,9200,27017 --open -sV <TARGET>', timeout: 90 },
-    aggressive: { cmd: 'nmap -p- --open -sV -sC --version-all --traceroute -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title,vulners" <TARGET>', timeout: 300 },
+    aggressive: { cmd: 'nmap -p- --open -sT -sV -sC --version-all -T4 --script "banner,ssl-enum-ciphers,http-headers,http-title" <TARGET>', timeout: 300 },
   },
   website_finder: {
     fast: { cmd: 'subfinder -d <TARGET> -silent -max-time 15', timeout: 20 },
