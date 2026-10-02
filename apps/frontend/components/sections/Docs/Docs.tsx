@@ -60,10 +60,11 @@ export const DOC_TOPICS: DocTopic[] = [
         codeSnippet: {
           language: 'bash',
           code: `# Launch an automated multi-vector scan via SecureLens API
-curl -X POST https://web-production-e3c1e.up.railway.app/api/scans/website \\
+curl -X POST https://web-production-e3c1e.up.railway.app/api/scans/create \\
   -H "Authorization: Bearer <YOUR_SECURELENS_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{
+    "workspaceId": "<YOUR_WORKSPACE_ID>",
     "target": "https://example.com",
     "mode": "website",
     "profile": "normal",
@@ -154,7 +155,7 @@ http:
         content: 'Include your JWT token or Organization API key in the Authorization header of every request:',
         codeSnippet: {
           language: 'http',
-          code: `POST /api/scans/website HTTP/1.1
+          code: `POST /api/scans/create HTTP/1.1
 Host: web-production-e3c1e.up.railway.app
 Authorization: Bearer <YOUR_SECURELENS_API_KEY>
 Content-Type: application/json`
@@ -165,8 +166,8 @@ Content-Type: application/json`
         content: 'Key REST endpoints for orchestrating scans, streaming telemetry, and querying findings:',
         keyPoints: [
           'POST /api/auth/login — User authentication and JWT generation.',
-          'POST /api/scans/website — Initiate a dynamic web application vulnerability scan.',
-          'POST /api/scans/github — Initiate static code analysis and dependency audit on a git repository.',
+          'POST /api/scans/create — Initiate a dynamic web application vulnerability scan.',
+          'POST /api/scans/create — Initiate static code analysis and dependency audit on a git repository.',
           'GET /api/scans — Retrieve scan history, filter by status, target, and risk score.',
           'GET /api/scans/:id — Query real-time scan progress, active phase, and telemetry logs.',
           'GET /api/findings — Query correlated security findings with severity, CVE, and category filters.',
@@ -262,7 +263,7 @@ jobs:
 
       - name: Trigger SecureLens SAST & Secret Scan
         run: |
-          curl -s -X POST https://web-production-e3c1e.up.railway.app/api/scans/github \\
+          curl -s -X POST https://web-production-e3c1e.up.railway.app/api/scans/create \\
             -H "Authorization: Bearer \${{ secrets.SECURELENS_API_KEY }}" \\
             -H "Content-Type: application/json" \\
             -d '{
