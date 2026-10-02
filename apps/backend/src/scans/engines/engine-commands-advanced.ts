@@ -207,7 +207,7 @@ const testssl_command: EngineCommandConfig = {
 
 const katana_command: EngineCommandConfig = {
   description: 'Web endpoint discovery using Katana',
-  cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent 2>/dev/null | sed -n '1,50p'',
+  cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent 2>/dev/null | sed -n "1,50p"',
   timeout: 90,
   parser: (output: string, target: string): FindingTemplate[] => {
     const findings: FindingTemplate[] = [];
@@ -685,14 +685,14 @@ const ENGINE_PROFILE_COMMANDS: Record<string, ProfileCommandConfig> = {
     aggressive: { cmd: 'timeout 180 testssl --quiet --full --vulnerable --sneaky --warnings batch <TARGET>', timeout: 190 },
   },
   katana: {
-    fast: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | sed -n '1,30p'', timeout: 20 },
-    normal: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | sed -n '1,100p'', timeout: 60 },
-    aggressive: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 6 -jc -ct 50 -f qurl -kf all -c 40 -timeout 30 2>/dev/null | sed -n '1,500p'', timeout: 160 },
+    fast: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | sed -n "1,30p"', timeout: 20 },
+    normal: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | sed -n "1,100p"', timeout: 60 },
+    aggressive: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 6 -jc -ct 50 -f qurl -kf all -c 40 -timeout 30 2>/dev/null | sed -n "1,500p"', timeout: 160 },
   },
   endpoint_discovery: {
-    fast: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | sed -n '1,30p'', timeout: 20 },
-    normal: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | sed -n '1,100p'', timeout: 60 },
-    aggressive: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 6 -jc -ct 50 -f qurl -kf all -c 40 -timeout 30 2>/dev/null | sed -n '1,500p'', timeout: 160 },
+    fast: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 1 -timeout 5 2>/dev/null | sed -n "1,30p"', timeout: 20 },
+    normal: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 3 -timeout 10 2>/dev/null | sed -n "1,100p"', timeout: 60 },
+    aggressive: { cmd: 'set -o pipefail; katana -u <TARGET> -jsonl -silent -d 6 -jc -ct 50 -f qurl -kf all -c 40 -timeout 30 2>/dev/null | sed -n "1,500p"', timeout: 160 },
   },
   nmap: {
     fast: { cmd: 'nmap -F --open -sV <TARGET>', timeout: 45 },
